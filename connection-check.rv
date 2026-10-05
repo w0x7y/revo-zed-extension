@@ -1,0 +1,6 @@
+# Revo language server connection check
+fn greet(name: string) -> string do
+  "Hello, " ~ name
+end
+
+print(greet("Zed"))

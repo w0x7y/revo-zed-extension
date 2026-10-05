@@ -2,3 +2,6 @@ target/
 *.wasm
 grammars/
 tree-sitter-revo/
+
+# Python checker bytecode.
+/tests/__pycache__/

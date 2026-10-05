@@ -12,14 +12,14 @@ impl zed::Extension for RevoExtension {
         _language_server_id: &zed::LanguageServerId,
         worktree: &zed::Worktree,
     ) -> zed::Result<zed::Command> {
-        let path = worktree
-            .which("revo")
-            .ok_or_else(|| "Could not find revo in PATH".to_string())?;
-
+        // Zed applies binary path, arguments and environment overrides itself.
+        let command = worktree.which("revo").ok_or_else(|| {
+            "Install revo or set lsp.revolt.binary.path in Zed settings".to_string()
+        })?;
         Ok(zed::Command {
-            command: path,
+            command,
             args: vec!["lsp".to_string()],
-            env: worktree.shell_env(),
+            env: Vec::new(),
         })
     }
 }

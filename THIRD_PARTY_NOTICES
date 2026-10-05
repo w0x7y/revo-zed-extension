@@ -1,7 +1,20 @@
+Tree-sitter Revo
+https://codeberg.org/doomy/tree-sitter-revo
+Revision: 610fa6a4ff0fecd9cc81806e5e85ea61c92091b4
+
+The maintained grammar, retaining this upstream history and MIT attribution,
+is published at https://github.com/w0x7y/tree-sitter-revo.
+The exact maintained revision is recorded in extension.toml.
+
+languages/revo/highlights.scm is adapted from queries/highlights.scm in
+Tree-sitter Revo. patches/tree-sitter-revo.patch also contains adapted
+grammar, scanner and query code. The grammar and its query adaptations are by doomy and
+contributors. The upstream grammar.js identifies doomy as the author and
+MIT as the license; package.json and tree-sitter.json also declare MIT.
+
 MIT License
 
-Copyright (c) 2026 matthew
-Copyright (c) 2026 Idan Gilboa
+Copyright (c) doomy and Tree-sitter Revo contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

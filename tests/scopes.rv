@@ -1,0 +1,5 @@
+let text = "hello"
+# a comment with "quotes"
+## a block comment with "quotes" ##
+#* documentation with "quotes" *#
+#! module documentation with "quotes" !#

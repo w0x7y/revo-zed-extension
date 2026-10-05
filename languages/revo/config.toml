@@ -1,6 +1,12 @@
 name = "Revo"
 grammar = "revo"
-path_suffixes = ["rv"]
-line_comments = ["#"]
+path_suffixes = ["rv", "revo"]
+line_comments = ["# "]
 tab_size = 2
-hard_tabs = false
+first_line_pattern = '^#!.*\brevo\b'
+brackets = [
+  { start = "{", end = "}", close = true, newline = true },
+  { start = "[", end = "]", close = true, newline = true },
+  { start = "(", end = ")", close = true, newline = true },
+  { start = "\"", end = "\"", close = true, newline = false, not_in = ["string", "comment"] },
+]

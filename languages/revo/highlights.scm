@@ -1,78 +1,109 @@
 ; identifiers
 (ident) @variable
-(self) @variable.builtin
+(self) @variable.special
+(yield) @keyword
 
 ; basic types
 (type) @type
-(number) @constant
+[
+  (number)
+  (integer)
+] @constant
 (string) @string
 (atom) @string.special
 (primitive) @type.builtin
+(type_expression type: (ident) @type)
+(type_expression value: (ident) @type)
+(parameter type: (ident) @type)
+(field type: (ident) @type)
+(return_type (ident) @type)
+(union_type (ident) @type)
+(optional_type (ident) @type)
+(result_type (ident) @type)
+(tagged_type (ident) @type)
+(parameterized_type (ident) @type)
+(qualified_type name: (ident) @type)
 (optional_type
   ("?") @punctuation)
 (result_type
   ("!") @punctuation)
 
-; structs
-(struct_definition
-  (visibility_modifier)? @keyword
-  (type)? @type)
-
 (table
   (field
-    (ident) @variable.other.member))
+    name: (ident) @property))
 
 (scoped
-  (ident) @variable.other.member)
+  (ident) @property)
 
 ; functions
 (function
   (visibility_modifier)? @keyword
-  (ident)? @function
-  (parameters
-    (ident)? @variable.parameter))
+  name: (ident) @function)
 
 (function_call
-  (ident) @function.call
-    (parameters
-      (ident)? @variable.parameter)
-      ("?")? @operator)
+  name: (ident) @function)
+
+(function
+  (parameters
+    (parameter
+      name: (ident) @variable.parameter)))
+
+(parameter "?" @operator)
 
 ; macros
 (macro
   ("macro") @keyword
-  (ident) @function.macro
-  (capture) @string.regexp)
+  (ident) @function
+  (capture) @string.regex)
 (proc_macro
   ("proc") @keyword
-  (ident) @function.macro
+  (ident) @function
   (parameters
-      (ident)? @variable.parameter))
+    (parameter
+      name: (ident)? @variable.parameter)))
 (macro_call
-  (ident) @function.macro)
+  (ident) @function)
 
 ; control flow
-(return ("return" @keyword.control.return))
+(return ("return" @keyword))
 
 ; comments
 (comment) @comment
+(multiline_comment) @comment
 (documentation) @comment.doc
 
+; the inside of the mod doc
+; keep this blank because it's supposed to keep markdown text white
+; (module_doc) @comment.block.documentation
+
+; module doc delimiters themselves
+"#!" @keyword
+"!#" @keyword
+
+; @author, @test, etc.
+(doc_tag) @attribute
+
+; shebang line
+(shebang) @keyword
+
 ; tests
-(suite) @comment.line.documentation
-(test) @comment.line.documentation
+"suite" @keyword
+"test" @keyword
+"skip" @keyword
 
 ; keywords
 label: (ident) @label
-["fn"] @keyword.function
-(operator) @keyword.operator
+["fn"] @keyword
+["="] @operator
+(operator) @operator
 [
   "const"
   "global"
   "let"
   "pub"
   "spawn"
-  "struct"
+  "comp"
+  "import"
   "type"
   (directive)
 ] @keyword
@@ -82,6 +113,7 @@ label: (ident) @label
   "end"
   "for"
   "if"
+  "unless"
   "in"
   "match"
   "not"
@@ -90,8 +122,10 @@ label: (ident) @label
   "loop"
   "continue"
   "break"
-] @keyword.control
+] @keyword
 [
+  "?"
+  "!"
   "{"
   "}"
   "["

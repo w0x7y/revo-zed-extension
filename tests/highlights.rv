@@ -1,0 +1,19 @@
+import "module.rv"
+const answer = comp 6 * 7
+fn greet(name: string) do
+  yield
+  name
+end
+let person: { name: string } = { name = "Ada" }
+let {first, second} = {1, 2}
+test "greeting" do
+  greet(person.name)
+end
+suite "examples"
+let struct = 1
+fn worker() 1
+let job = spawn worker()
+let value = match {:ok, 42}
+| {:ok, result} => result
+| {:err, error} => 0
+type state = number

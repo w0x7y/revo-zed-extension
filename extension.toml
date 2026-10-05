@@ -2,14 +2,22 @@ id = "revo"
 name = "Revo"
 version = "0.0.1"
 schema_version = 1
-authors = ["matthew <mattifex@gmail.com>"]
-description = "Revo language support for Zed"
+description = "Revo language support with syntax highlighting and the Revolt language server."
+authors = ["matthew <mattifex@gmail.com>", "Idan Gilboa"]
 repository = "https://github.com/scout0773/revo-zed-extension"
+languages = ["languages/revo"]
+
+[lib]
+kind = "Rust"
+version = "0.7.0"
 
 [grammars.revo]
-repository = "https://codeberg.org/doomy/tree-sitter-revo"
-rev = "main"
+repository = "https://github.com/w0x7y/tree-sitter-revo"
+rev = "f15165b5391656ed3dcce25e18dbfba4320d80ed"
 
 [language_servers.revolt]
 name = "Revolt"
 languages = ["Revo"]
+
+[language_servers.revolt.language_ids]
+Revo = "revo"

@@ -1,0 +1,22 @@
+# Current compiler syntax covered by the published Tree-sitter grammar.
+fn identity<T>(value: T) -> T value
+fn optional(?count: num = 1 + 2) count
+let decision = match 2
+| 1, 2 => :yes
+| _ => :no
+let standalone = match
+| :true => 1
+const module = import "module.rv"
+declare native = fn(value: num) -> num
+let truth = :true and :false or :true
+let {left: num, right} = {1, 2}
+{left, right} = {3, 4}
+proc echo!(ctx) ctx
+const result = comp 6 * 7
+const tiny = 1e-2
+type Maybe<T> = T | :nil
+let explicit = identity<num>(2)
+let typed = match 1
+| value: num => value
+| _ => 0
+fn lower<t,>(value: t) -> t value
