@@ -1,68 +1,52 @@
-# Revo for Zed
+# revo-zed-extension
 
-A Zed language extension for [Revo](https://revo.lung.fyi/).
-It recognizes `.rv` and `.revo` files, adds tree-sitter syntax highlighting,
-and launches the Revolt language server supplied by your installed Revo
-executable with `revo lsp`.
+[revo](https://revo.lung.fyi) in [zed](https://zed.dev).
 
-## How to install in Zed
+syntax highlighting for `.rv` and `.revo`, plus revolt, the language server
+bundled with revo. completion, hover, diagnostics, definitions, rename, and more.
 
-Install this checkout as a local development extension.
+[get started](#get-started) | [settings](#settings) | [if something breaks](#if-something-breaks) | [develop](#develop) | [credits](#credits)
 
-### Prerequisites
+## get started
 
-- Install [Zed](https://zed.dev/download).
-- Install [Revo](https://revo.lung.fyi/#get) and make `revo` available on your
-  shell's `PATH`. Run `revo --help` in a terminal and check that `lsp` appears
-  in its commands. The extension uses this installation of Revo.
-- Install [Rust through rustup](https://rustup.rs/). Restart Zed afterward so
-  it can find the new toolchain.
-
-### Installation steps
-
-Get a local checkout first:
+you need [zed](https://zed.dev/download), [revo](https://revo.lung.fyi/#get),
+and [rust through rustup](https://rustup.rs). restart zed after installing rust.
 
 ```sh
-git clone https://github.com/scout0773/revo-zed-extension.git
+# revo needs to be on your PATH, with the lsp command available
+revo --help
+
+git clone https://github.com/w0x7y/revo-zed-extension.git
 ```
 
-If you already have a checkout, use that folder.
+install this checkout as a development extension:
 
-1. Open Zed's command palette with `Ctrl+Shift+P` on Linux or Windows, or
-   `Cmd+Shift+P` on macOS.
-2. Run `zed: install dev extension`. You can also open the Extensions page
-   and click **Install Dev Extension**.
-3. Select the extension's root folder, the one containing `extension.toml`
-   and `Cargo.toml`.
-4. Wait for the build to finish. Zed compiles the Rust adapter and downloads
-   the tools needed to build the pinned tree-sitter grammar. The first
-   installation needs internet access.
-5. Open a Revo project or the included `connection-check.rv` file. Trust
-   the project folder if Zed prompts you; the language server waits until
-   that folder is trusted.
+1. open zed's command palette, `Ctrl+Shift+P` or `Cmd+Shift+P` on macOS
+2. run `zed: install dev extension`
+3. select the cloned `revo-zed-extension` folder, the one with `extension.toml` in it
+4. wait for the build. the first install downloads tools and needs internet
+5. open a `.rv` or `.revo` file. trust the project if zed asks
 
-Zed manages the `wasm32-wasip2` target when Rust is installed through rustup
-and downloads the grammar's WASI SDK automatically. See
-[Zed's development extension documentation](https://zed.dev/docs/extensions/developing-extensions).
+zed builds the rust adapter and the pinned grammar for you. with rustup installed,
+it also manages the WebAssembly target. see [zed's extension docs](https://zed.dev/docs/extensions/developing-extensions).
 
-### Check that it works
+try opening [connection-check.rv](connection-check.rv):
 
-The file's language should show **Revo** in Zed's status bar, and its code
-should have syntax highlighting. In `connection-check.rv`, hover over
-`greet` in the final line to check that the language server responds.
+```revo
+fn greet(name: string) -> string do
+  "Hello, " ~ name
+end
 
-If it does not work, run `zed: open log` and look for messages mentioning
-`revo` or `revolt`. If Zed cannot find the Revo executable, set its absolute
-path using the settings in [Configure](#configure). If the extension build
-fails, check that Rust is installed through rustup and retry the installation.
+print(greet("Zed"))
+```
 
-## Configure
+the status bar should say `Revo`, and the code should have colors.
+hover over `greet` on the last line to check the language server too.
 
-The default command is `revo lsp`. To select a different executable, add the
-following to Zed's settings, replacing the example path. Include
-`"arguments": ["lsp"]` whenever you set `binary.path`, because Zed launches
-explicit paths directly without using the extension's default arguments.
-Merge these entries into any existing `lsp` and `languages` settings:
+## settings
+
+by default, the extension finds `revo` on your project's `PATH` and runs `revo lsp`.
+to use a different executable, merge this into your zed settings:
 
 ```json
 {
@@ -83,22 +67,33 @@ Merge these entries into any existing `lsp` and `languages` settings:
 }
 ```
 
-Zed also applies `lsp.revolt.binary.env` and any explicit arguments. The
-extension supplies only the default executable lookup and `lsp` argument.
+keep `"arguments": ["lsp"]` when setting `binary.path`.
+zed launches explicit paths directly, so the default argument won't be added.
+`lsp.revolt.binary.env` works too.
 
-## Develop
+revolt ships with revo. update your `revo` executable to update the server;
+`revo version` tells you what you have installed. the server doesn't advertise a formatter.
 
-- `src/lib.rs`: locates Revo and supplies the language server command.
-- `extension.toml`: registers the language server and pins the grammar.
-- `languages/revo/config.toml`: file associations, comments and brackets.
-- `languages/revo/highlights.scm`: syntax highlighting queries.
-- `languages/revo/overrides.scm`: string and comment scopes for quote closing.
-- `languages/revo/indents.scm`: indentation for blocks, tables and parameters.
-- `languages/revo/outline.scm`: named functions, procedural macros, types and tests.
-- `languages/revo/brackets.scm`: matching delimiters and `do`/`end` blocks.
-- `connection-check.rv`: a sample file for checking the connection.
+## if something breaks
 
-To rebuild the Rust adapter from this directory:
+- no language server? check that `revo --help` lists `lsp`, and that the project
+  is trusted. set the executable path above if zed can't find it
+- build failed? check that rust is installed through rustup, restart zed, and
+  try installing the extension again
+- still stuck? run `zed: open log` and look for `revo` or `revolt`.
+  include those messages when [opening an issue](https://github.com/scout0773/revo-zed-extension/issues)
+
+to remove it, uninstall revo from zed's extensions page and remove any
+`lsp.revolt` and `languages.Revo` settings you added.
+
+## develop
+
+the rust adapter is in [src/lib.rs](src/lib.rs), the grammar pin is in
+[extension.toml](extension.toml), and the editor queries are in
+[languages/revo](languages/revo).
+
+<details>
+<summary>build the adapter</summary>
 
 ```sh
 rustup target add wasm32-wasip2
@@ -106,14 +101,15 @@ cargo build --locked --release --target wasm32-wasip2
 cp target/wasm32-wasip2/release/revo_zed.wasm extension.wasm
 ```
 
-Restart Zed after replacing the compiled adapter. Installing this directory
-through `zed: install dev extension` also builds the grammar, which is sourced
-from the [maintained Revo grammar](https://github.com/w0x7y/tree-sitter-revo)
-at the revision recorded in `extension.toml`. Highlight queries are adapted
-from that grammar's `queries/highlights.scm`.
+restart zed afterward. installing through `zed: install dev extension` also
+builds the grammar.
 
-To check the syntax scopes, install Python 3.11+, Git, the tree-sitter CLI
-0.26.9 and a C compiler, then run:
+</details>
+
+<details>
+<summary>run the checks</summary>
+
+you need python 3.11+, git, tree-sitter CLI 0.26.9, and a C compiler.
 
 ```sh
 python3 tests/check_scopes.py
@@ -122,69 +118,32 @@ python3 tests/check_grammar.py
 python3 tests/check_grammar_support.py
 ```
 
-The check fetches the grammar revision from `extension.toml` into a temporary
-directory, parses real Revo strings and comments, and verifies the scope
-captures used by quote closing. To reuse an existing checkout of that same
-revision, pass its path as an argument.
+these fetch the pinned grammar into temporary directories. they check scopes,
+all zed queries, the grammar corpus, AST contracts, and parser cleanup and errors.
+you can pass a clean checkout of the same grammar revision to reuse it.
 
-The highlight check also compiles every Zed query and checks imports,
-`comp`, `yield`, table fields, test bodies, parameter declarations and lowercase
-type outlines. `check_grammar.py` runs the complete corpus and AST contracts
-against the manifest pin. Each check uses a private parser library, shared
-within that check, so parallel runs cannot overwrite a common cache.
-The support regression uses the real CLI to check concurrent contexts, cleanup,
-revision and dirty-input rejection, and syntax errors versus tool failures.
-
-## Current Revo support
-
-Revolt is bundled into Revo; updating the `revo` executable updates the
-language server used by Zed. Verify it with `revo version`.
-Current upstream source requires **Zig 0.17.0** and builds with
-`zig build -Doptimize=safe`. See [Revo's build instructions](https://github.com/if-not-nil/revo#install-from-source)
-and the [grammar coverage report](docs/grammar-continuation.md).
-
-The current server provides completion, hover, definitions, references,
-rename, document/workspace symbols, diagnostics, semantic tokens, inlay hints,
-signature help and match quick fixes. It does not advertise a formatter.
-New standard-library APIs come from the installed compiler; the extension
-does not keep a separate list of builtins.
-
-The manifest pins a public, immutable commit in
-[w0x7y/tree-sitter-revo](https://github.com/w0x7y/tree-sitter-revo), which
-preserves doomy's upstream history and attribution. It covers current generic
-calls and types, structural function signatures, variadic type parameters,
-imports, matches, postfix expressions, iterator ranges and macro calls.
-The reviewed grammar passes 132 corpus cases and all 55 supported compiler
-fixtures; one historical issue fixture contains compiler-rejected syntax.
-See the [coverage report](docs/grammar-continuation.md) for the exact revisions
-and the remaining approximation in general operator precedence.
-
-[patches/tree-sitter-revo.patch](patches/tree-sitter-revo.patch) reproduces the
-source changes against the original upstream base in `tests/compatibility.toml`.
-It is already included in the public pin; do not apply it to that commit again.
-To verify the original-base reproduction, use Python 3.11+, Node.js, Git,
-Tree-sitter CLI 0.26.9 and a C compiler:
+to check that the source patch reproduces the grammar from its original upstream
+base, you also need node.js:
 
 ```sh
 python3 tests/check_grammar_patch.py
 ```
 
-That check generates the parser, runs the original and added corpus, verifies
-AST contracts, and compiles all Zed queries. Normal extension installation
-now builds the same published grammar rather than replacing locally patched
-syntax support with an older parser.
+the patch is already included in the public grammar pin. don't apply it there again.
+the [coverage report](docs/grammar-continuation.md) records the tested revisions
+and remaining grammar limitations.
 
-## License
+</details>
 
-MIT. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES)
-for the grammar query attribution.
+upstream is [scout0773/revo-zed-extension](https://github.com/scout0773/revo-zed-extension).
+this fork's improvements are contributed through [PR #1](https://github.com/scout0773/revo-zed-extension/pull/1),
+for the extension proposed in [zed PR #7417](https://github.com/zed-industries/extensions/pull/7417).
 
-## Remove
+## credits
 
-Uninstall Revo from Zed's Extensions page and remove any `lsp.revolt` and
-`languages.Revo` settings you added. The source repository remains available.
+original extension by [scout0773](https://github.com/scout0773),
+with updates by [w0x7y](https://github.com/w0x7y). licensed as [MIT](LICENSE).
 
-## Credits
-
-Revo is maintained by [if-not-nil](https://github.com/if-not-nil/revo).
-The maintained grammar preserves [doomy's original grammar](https://codeberg.org/doomy/tree-sitter-revo) and MIT attribution.
+syntax queries adapted from [doomy's tree-sitter-revo](https://codeberg.org/doomy/tree-sitter-revo),
+with the maintained grammar at [w0x7y/tree-sitter-revo](https://github.com/w0x7y/tree-sitter-revo).
+see [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES) for attribution.
