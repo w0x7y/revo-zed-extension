@@ -4,7 +4,7 @@ version = "0.0.1"
 schema_version = 1
 description = "Revo language support with syntax highlighting and the Revolt language server."
 authors = ["matthew <mattifex@gmail.com>", "Idan Gilboa"]
-repository = "https://github.com/scout0773/revo-zed-extension"
+repository = "https://github.com/w0x7y/revo-zed-extension"
 languages = ["languages/revo"]
 
 [lib]

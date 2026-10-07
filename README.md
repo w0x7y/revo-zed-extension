@@ -81,7 +81,7 @@ revolt ships with revo. update your `revo` executable to update the server;
 - build failed? check that rust is installed through rustup, restart zed, and
   try installing the extension again
 - still stuck? run `zed: open log` and look for `revo` or `revolt`.
-  include those messages when [opening an issue](https://github.com/scout0773/revo-zed-extension/issues)
+  include those messages when [opening an issue](https://github.com/w0x7y/revo-zed-extension/issues)
 
 to remove it, uninstall revo from zed's extensions page and remove any
 `lsp.revolt` and `languages.Revo` settings you added.
@@ -134,10 +134,6 @@ the [coverage report](docs/grammar-continuation.md) records the tested revisions
 and remaining grammar limitations.
 
 </details>
-
-upstream is [scout0773/revo-zed-extension](https://github.com/scout0773/revo-zed-extension).
-this fork's improvements are contributed through [PR #1](https://github.com/scout0773/revo-zed-extension/pull/1),
-for the extension proposed in [zed PR #7417](https://github.com/zed-industries/extensions/pull/7417).
 
 ## credits
 

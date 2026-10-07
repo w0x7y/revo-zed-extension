@@ -4,7 +4,7 @@ version = "0.0.1"
 edition = "2021"
 publish = false
 license = "MIT"
-repository = "https://github.com/scout0773/revo-zed-extension"
+repository = "https://github.com/w0x7y/revo-zed-extension"
 
 [lib]
 crate-type = ["cdylib"]
