@@ -1,34 +1,33 @@
-# revo-zed-extension
+# revo for zed
 
 [revo](https://revo.lung.fyi) in [zed](https://zed.dev).
 
-syntax highlighting for `.rv` and `.revo`, plus revolt, the language server
-bundled with revo. completion, hover, diagnostics, definitions, rename, and more.
+syntax highlighting for `.rv` and `.revo` files.
+completion, hover, diagnostics, go to definition, and rename through revolt,
+the language server bundled with revo.
 
-[get started](#get-started) | [settings](#settings) | [if something breaks](#if-something-breaks) | [develop](#develop) | [credits](#credits)
-
-## get started
+## install
 
 you need [zed](https://zed.dev/download), [revo](https://revo.lung.fyi/#get),
 and [rust through rustup](https://rustup.rs). restart zed after installing rust.
 
 ```sh
-# revo needs to be on your PATH, with the lsp command available
+# check that revo is on your PATH and lists the lsp command
 revo --help
 
 git clone https://github.com/w0x7y/revo-zed-extension.git
 ```
 
-install this checkout as a development extension:
+in zed:
 
 1. open zed's command palette, `Ctrl+Shift+P` or `Cmd+Shift+P` on macOS
 2. run `zed: install dev extension`
-3. select the cloned `revo-zed-extension` folder, the one with `extension.toml` in it
-4. wait for the build. the first install downloads tools and needs internet
-5. open a `.rv` or `.revo` file. trust the project if zed asks
+3. select the cloned `revo-zed-extension` folder
+4. wait for the build, then open a `.rv` or `.revo` file. trust the project if asked
 
-zed builds the rust adapter and the pinned grammar for you. with rustup installed,
-it also manages the WebAssembly target. see [zed's extension docs](https://zed.dev/docs/extensions/developing-extensions).
+zed builds the extension and grammar for you. the first install needs internet.
+
+## try it
 
 try opening [connection-check.rv](connection-check.rv):
 
@@ -40,13 +39,13 @@ end
 print(greet("Zed"))
 ```
 
-the status bar should say `Revo`, and the code should have colors.
-hover over `greet` on the last line to check the language server too.
+look for `Revo` in the status bar and colors in the code.
+hover over `greet` on the last line to check revolt.
 
 ## settings
 
-by default, the extension finds `revo` on your project's `PATH` and runs `revo lsp`.
-to use a different executable, merge this into your zed settings:
+the extension runs `revo lsp` from your project's `PATH`.
+if zed can't find it, add this to your zed settings:
 
 ```json
 {
@@ -57,43 +56,35 @@ to use a different executable, merge this into your zed settings:
         "arguments": ["lsp"]
       }
     }
-  },
-  "languages": {
-    "Revo": {
-      "language_servers": ["revolt"],
-      "semantic_tokens": "combined"
-    }
   }
 }
 ```
 
-keep `"arguments": ["lsp"]` when setting `binary.path`.
-zed launches explicit paths directly, so the default argument won't be added.
-`lsp.revolt.binary.env` works too.
+replace the path with your revo executable. keep `"arguments": ["lsp"]`;
+zed doesn't add it when you set a path. `lsp.revolt.binary.env` sets environment variables.
 
-revolt ships with revo. update your `revo` executable to update the server;
-`revo version` tells you what you have installed. the server doesn't advertise a formatter.
+update revo to update revolt. check your version with `revo version`.
+revolt doesn't provide a formatter.
 
 ## if something breaks
 
-- no language server? check that `revo --help` lists `lsp`, and that the project
-  is trusted. set the executable path above if zed can't find it
-- build failed? check that rust is installed through rustup, restart zed, and
-  try installing the extension again
-- still stuck? run `zed: open log` and look for `revo` or `revolt`.
-  include those messages when [opening an issue](https://github.com/w0x7y/revo-zed-extension/issues)
+- no revolt? check that `revo --help` lists `lsp` and the project is trusted.
+  try setting the path above
+- build failed? install rust through rustup, restart zed, and try again
+- still stuck? run `zed: open log`, look for `revo` or `revolt`, and include
+  those messages in an [issue](https://github.com/w0x7y/revo-zed-extension/issues)
 
-to remove it, uninstall revo from zed's extensions page and remove any
-`lsp.revolt` and `languages.Revo` settings you added.
+to uninstall, remove revo from zed's extensions page and delete any
+`lsp.revolt` or `languages.Revo` settings you added.
 
 ## develop
 
-the rust adapter is in [src/lib.rs](src/lib.rs), the grammar pin is in
-[extension.toml](extension.toml), and the editor queries are in
-[languages/revo](languages/revo).
+the adapter is in [src/lib.rs](src/lib.rs), the grammar revision is in
+[extension.toml](extension.toml), and the queries are in [languages/revo](languages/revo).
+use `zed: install dev extension` to build both the adapter and grammar.
+see [zed's extension docs](https://zed.dev/docs/extensions/developing-extensions).
 
-<details>
-<summary>build the adapter</summary>
+to build just the adapter:
 
 ```sh
 rustup target add wasm32-wasip2
@@ -101,39 +92,12 @@ cargo build --locked --release --target wasm32-wasip2
 cp target/wasm32-wasip2/release/revo_zed.wasm extension.wasm
 ```
 
-restart zed afterward. installing through `zed: install dev extension` also
-builds the grammar.
+restart zed afterward.
 
-</details>
-
-<details>
-<summary>run the checks</summary>
-
-you need python 3.11+, git, tree-sitter CLI 0.26.9, and a C compiler.
-
-```sh
-python3 tests/check_scopes.py
-python3 tests/check_highlights.py
-python3 tests/check_grammar.py
-python3 tests/check_grammar_support.py
-```
-
-these fetch the pinned grammar into temporary directories. they check scopes,
-all zed queries, the grammar corpus, AST contracts, and parser cleanup and errors.
-you can pass a clean checkout of the same grammar revision to reuse it.
-
-to check that the source patch reproduces the grammar from its original upstream
-base, you also need node.js:
-
-```sh
-python3 tests/check_grammar_patch.py
-```
-
-the patch is already included in the public grammar pin. don't apply it there again.
-the [coverage report](docs/grammar-continuation.md) records the tested revisions
-and remaining grammar limitations.
-
-</details>
+the [grammar report](docs/grammar-continuation.md) has the check commands and
+known limitations. checks need python 3.11+, git, tree-sitter CLI 0.26.9, and
+a C compiler. the patch check also needs node.js. the pinned grammar already
+includes the patch.
 
 ## credits
 
