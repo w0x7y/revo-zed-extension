@@ -109,6 +109,10 @@ builds the grammar.
 <details>
 <summary>run the checks</summary>
 
+The [CI workflow](.github/workflows/ci.yml) builds the Wasm adapter and runs
+the grammar, editor query, patch reproduction, and audited compiler fixture
+checks on pull requests and pushes to `main`.
+
 you need python 3.11+, git, tree-sitter CLI 0.26.9, and a C compiler.
 
 ```sh
