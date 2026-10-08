@@ -66,6 +66,26 @@ zed doesn't add it when you set a path. `lsp.revolt.binary.env` sets environment
 update revo to update revolt. check your version with `revo version`.
 revolt doesn't provide a formatter.
 
+optional: let revolt help color your code. add this to your existing zed settings:
+
+```json
+{
+  "languages": {
+    "Revo": {
+      "semantic_tokens": "combined"
+    }
+  }
+}
+```
+
+zed already colors code based on its syntax. with this enabled, revolt also
+helps color names based on what they refer to, such as functions or variables.
+`"combined"` adds this information on top of the usual highlighting.
+zed leaves this off by default.
+
+if the colors don't update, run `editor: restart language server`.
+see [zed's semantic token docs](https://zed.dev/docs/semantic-tokens) for more.
+
 ## if something breaks
 
 - no revolt? check that `revo --help` lists `lsp` and the project is trusted.
