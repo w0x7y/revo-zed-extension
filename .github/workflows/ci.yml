@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  adapter:
+    name: Rust adapter
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        with:
+          toolchain: stable
+          targets: wasm32-wasip2
+          components: rustfmt, clippy
+      - name: Check formatting
+        run: cargo fmt --check
+      - name: Check Rust warnings
+        run: cargo clippy --locked -- -D warnings
+      - name: Build the Wasm adapter
+        run: cargo build --locked --release --target wasm32-wasip2
+
+  grammar:
+    name: Grammar and editor queries
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+      - name: Install Tree-sitter CLI 0.26.9
+        shell: bash
+        run: |
+          curl --fail --location --silent --show-error \
+            https://github.com/tree-sitter/tree-sitter/releases/download/v0.26.9/tree-sitter-linux-x64.gz \
+            --output "$RUNNER_TEMP/tree-sitter.gz"
+          echo "9ce82137caa65864e7ca8b869fd391cef88c9bd2a01c4371b9c4dd26c2585efb  $RUNNER_TEMP/tree-sitter.gz" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/revo-tools"
+          gzip --decompress --stdout "$RUNNER_TEMP/tree-sitter.gz" > "$RUNNER_TEMP/revo-tools/tree-sitter"
+          chmod +x "$RUNNER_TEMP/revo-tools/tree-sitter"
+          echo "$RUNNER_TEMP/revo-tools" >> "$GITHUB_PATH"
+      - name: Fetch the audited grammar and compiler revisions
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          import subprocess
+          import tomllib
+
+          grammar = tomllib.loads(Path('extension.toml').read_text())['grammars']['revo']
+          compiler = tomllib.loads(Path('tests/compatibility.toml').read_text())['compiler']
+          for name, spec in [('revo-grammar', grammar), ('revo-compiler', compiler)]:
+              checkout = str(Path(os.environ['RUNNER_TEMP']) / name)
+              subprocess.run(['git', 'clone', '--quiet', spec['repository'], checkout], check=True)
+              subprocess.run(['git', '-C', checkout, 'checkout', '--quiet', '--detach', spec['rev']], check=True)
+      - name: Check string and comment scopes
+        run: python3 tests/check_scopes.py "$RUNNER_TEMP/revo-grammar"
+      - name: Check highlighting and editor queries
+        run: python3 tests/check_highlights.py "$RUNNER_TEMP/revo-grammar"
+      - name: Check the grammar corpus and AST contracts
+        run: python3 tests/check_grammar.py "$RUNNER_TEMP/revo-grammar"
+      - name: Check parser ownership and failure handling
+        run: python3 tests/check_grammar_support.py "$RUNNER_TEMP/revo-grammar"
+      - name: Reproduce the upstream grammar patch
+        run: python3 tests/check_grammar_patch.py "$RUNNER_TEMP/revo-grammar"
+      - name: Check audited compiler fixtures
+        run: python3 tests/check_compiler_syntax.py "$RUNNER_TEMP/revo-grammar" "$RUNNER_TEMP/revo-compiler"

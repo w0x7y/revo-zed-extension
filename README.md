@@ -94,6 +94,10 @@ cp target/wasm32-wasip2/release/revo_zed.wasm extension.wasm
 
 restart zed afterward.
 
+the [CI workflow](.github/workflows/ci.yml) builds the Wasm adapter and runs
+the grammar, editor query, patch reproduction, and audited compiler fixture
+checks on pull requests and pushes to `main`.
+
 the [grammar report](docs/grammar-continuation.md) has the check commands and
 known limitations. checks need python 3.11+, git, tree-sitter CLI 0.26.9, and
 a C compiler. the patch check also needs node.js. the pinned grammar already
