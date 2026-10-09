@@ -18,6 +18,21 @@ revo --help
 git clone https://github.com/w0x7y/revo-zed-extension.git
 ```
 
+your Revo executable must include the `lsp` command. the audited Revo revision
+leaves it out of the default build. if `revo --help` doesn't list it, rebuild
+from your Revo source checkout with exact Zig 0.17.0 on your PATH:
+
+```sh
+zig build -Doptimize=safe -Dfeatures=isocline,regex,mimalloc,ffi,lsp
+install -Dm755 zig-out/bin/revo "$HOME/.local/bin/revo"
+export PATH="$HOME/.local/bin:$PATH"
+revo --help
+```
+
+check that the help now lists `lsp`, then restart Zed. keep `lsp` in the feature
+list when rebuilding Revo. see [Revo's source installation guide](https://github.com/if-not-nil/revo#install-from-source)
+for checkout and toolchain setup.
+
 in zed:
 
 1. open zed's command palette, `Ctrl+Shift+P` or `Cmd+Shift+P` on macOS
@@ -90,6 +105,10 @@ see [zed's semantic token docs](https://zed.dev/docs/semantic-tokens) for more.
 
 - no revolt? check that `revo --help` lists `lsp` and the project is trusted.
   try setting the path above
+- `error: FileNotFound 'lsp'`? the selected Revo executable was built without
+  LSP support. rebuild with the `lsp` feature as shown above, replace that
+  executable and run `editor: restart language server`. changing the `lsp`
+  argument won't enable a missing build feature
 - build failed? install rust through rustup, restart zed, and try again
 - still stuck? run `zed: open log`, look for `revo` or `revolt`, and include
   those messages in an [issue](https://github.com/w0x7y/revo-zed-extension/issues)
