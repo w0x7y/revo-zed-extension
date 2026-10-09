@@ -4,10 +4,11 @@ The maintained grammar is published at
 [w0x7y/tree-sitter-revo](https://github.com/w0x7y/tree-sitter-revo), with all
 54 upstream commits retained and an MIT license crediting doomy, contributors
 and Idan Gilboa. `extension.toml` pins the reviewed public commit
-`f15165b5391656ed3dcce25e18dbfba4320d80ed`.
+[`cd1bed33767f7dbfbfbc7882e4a18d5ec229030b`](https://github.com/w0x7y/tree-sitter-revo/commit/cd1bed33767f7dbfbfbc7882e4a18d5ec229030b),
+updated from `f15165b5391656ed3dcce25e18dbfba4320d80ed`.
 
 The audit uses Revo compiler commit
-[`b571298b6fc95bc863548f118354c8d077792f6f`](https://github.com/if-not-nil/revo/commit/b571298b6fc95bc863548f118354c8d077792f6f)
+[`e94e6d89ddaabb3249b38c1b10df87c700d1e8dc`](https://github.com/if-not-nil/revo/commit/e94e6d89ddaabb3249b38c1b10df87c700d1e8dc)
 and Tree-sitter CLI 0.26.9. The original upstream grammar base is
 `610fa6a4ff0fecd9cc81806e5e85ea61c92091b4`.
 
@@ -21,9 +22,29 @@ fixture explicitly marks them unfinished. The grammar retains its error,
 and `tests/compatibility.toml` records this exception rather than silently
 excluding it from the result.
 
-The 132 corpus cases include all 70 upstream cases and the preceding
-83-case compatibility corpus with their expected trees preserved. Separate
-checks verify 25 expression forms, 18 valid generic calls and 21 rejected
+The compiler audit and public grammar pin were refreshed on 2026-10-09.
+The grammar rejects whitespace before a loop range separator, including complete
+programs such as `for i in 0 ..3 do i end` and
+`for i in 0..2 ..10 do i end`, following Revo's
+[range-start and step adjacency checks](https://github.com/if-not-nil/revo/commit/71115dea59391f2fbb1e5e79226157aea3a6ffd5).
+Strings stay opaque syntax nodes, so `"#{t:d}"` remains highlighted as a string
+while [the compiler reports an invalid interpolation mode](https://github.com/if-not-nil/revo/commit/e94e6d89ddaabb3249b38c1b10df87c700d1e8dc).
+The supported modes are `:v`, `:?` and `:p`; `"#{:d}"` remains valid because
+its expression is a lone atom. Comment extras can also bridge a loop range
+operator, as in `start##gap##..limit`, although the compiler requires literal
+adjacency. These are intentional editor recoveries; Revolt supplies compiler
+diagnostics.
+
+Range bounds now use expression nodes for every numeric spelling, retaining the
+named `range` node. Arithmetic stays within its start, step or endpoint, and
+table index slices support computed and omitted bounds. Numeric bounds have
+children rather than the opaque tokens used by the preceding public pin.
+The existing Zed queries compile against these structures, preserving numeric
+constant captures and variable captures in computed bounds.
+
+The pinned public grammar passes 188 corpus cases, including complete-program
+range and interpolation regressions with explicit editor recovery expectations.
+Separate checks verify 25 expression forms, 18 valid generic calls and 21 rejected
 generic-call forms, comparison trees, lexical nodes and function captures.
 Unicode atom and receiver checks reject codepoints that could otherwise
 narrow to ASCII in the external scanner. Both native and Wasm parser builds
@@ -46,10 +67,10 @@ Indexed, called or numeric-field receivers retain comparison parsing.
 Comments and ASCII whitespace can separate dotted path segments; comments
 inside generic arguments stop speculation. Keyword field names are allowed,
 while bare keyword receivers and keyword generic arguments are rejected.
-Sources: [postfix parsing](https://github.com/if-not-nil/revo/blob/b571298b6fc95bc863548f118354c8d077792f6f/src/lang/Parser.zig#L286),
-[generic speculation](https://github.com/if-not-nil/revo/blob/b571298b6fc95bc863548f118354c8d077792f6f/src/lang/Parser.zig#L1623),
-[type syntax](https://github.com/if-not-nil/revo/blob/b571298b6fc95bc863548f118354c8d077792f6f/src/lang/type_syntax.zig),
-[identifier characters](https://github.com/if-not-nil/revo/blob/b571298b6fc95bc863548f118354c8d077792f6f/src/lang/Lexer.zig#L1067).
+Sources: [postfix parsing](https://github.com/if-not-nil/revo/blob/e94e6d89ddaabb3249b38c1b10df87c700d1e8dc/src/lang/Parser.zig#L287),
+[generic speculation](https://github.com/if-not-nil/revo/blob/e94e6d89ddaabb3249b38c1b10df87c700d1e8dc/src/lang/Parser.zig#L1634),
+[type syntax](https://github.com/if-not-nil/revo/blob/e94e6d89ddaabb3249b38c1b10df87c700d1e8dc/src/lang/type_syntax.zig),
+[identifier characters](https://github.com/if-not-nil/revo/blob/e94e6d89ddaabb3249b38c1b10df87c700d1e8dc/src/lang/Lexer.zig#L1067).
 
 Type records and expression tables have separate hidden grammar rules but
 retain the existing `table` and `field` tree nodes. This keeps contextual
