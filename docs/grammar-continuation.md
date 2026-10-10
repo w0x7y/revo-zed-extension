@@ -8,8 +8,11 @@ and Idan Gilboa. `extension.toml` pins the reviewed public commit
 updated from `f15165b5391656ed3dcce25e18dbfba4320d80ed`.
 
 The audit uses Revo compiler commit
-[`e94e6d89ddaabb3249b38c1b10df87c700d1e8dc`](https://github.com/if-not-nil/revo/commit/e94e6d89ddaabb3249b38c1b10df87c700d1e8dc)
-and Tree-sitter CLI 0.26.9. The original upstream grammar base is
+[`f0034ab75aaf49d65bc1b4769987f99380383fcb`](https://github.com/if-not-nil/revo/commit/f0034ab75aaf49d65bc1b4769987f99380383fcb)
+and Tree-sitter CLI 0.26.9. It moved from
+`e94e6d89ddaabb3249b38c1b10df87c700d1e8dc` on 2026-10-10; upstream changed
+only its README and wasm build defaults, with no lexer, parser or fixture
+changes. The original upstream grammar base is
 `610fa6a4ff0fecd9cc81806e5e85ea61c92091b4`.
 
 ## Verified coverage
