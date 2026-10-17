@@ -18,19 +18,20 @@ revo --help
 git clone https://github.com/w0x7y/revo-zed-extension.git
 ```
 
-your Revo executable must include the `lsp` command. the audited Revo revision
-leaves it out of the default build. if `revo --help` doesn't list it, rebuild
-from your Revo source checkout with exact Zig 0.17.0 on your PATH:
+your Revo executable must include the `lsp` command. Revo's default native
+build includes it from revision `d2f1644`; older builds leave it out. if
+`revo --help` doesn't list it, update your Revo source checkout and rebuild
+with exact Zig 0.17.0 on your PATH:
 
 ```sh
-zig build -Doptimize=safe -Dfeatures=isocline,regex,mimalloc,ffi,lsp
+zig build -Doptimize=safe
 install -Dm755 zig-out/bin/revo "$HOME/.local/bin/revo"
 export PATH="$HOME/.local/bin:$PATH"
 revo --help
 ```
 
-check that the help now lists `lsp`, then restart Zed. keep `lsp` in the feature
-list when rebuilding Revo. see [Revo's source installation guide](https://github.com/if-not-nil/revo#install-from-source)
+check that the help now lists `lsp`, then restart Zed. if you pass
+`-Dfeatures`, keep `lsp` in the list. see [Revo's source installation guide](https://github.com/if-not-nil/revo#install-from-source)
 for checkout and toolchain setup.
 
 in zed:
