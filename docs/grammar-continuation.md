@@ -8,7 +8,7 @@ and Idan Gilboa. `extension.toml` pins the reviewed public commit
 updated from `f15165b5391656ed3dcce25e18dbfba4320d80ed`.
 
 The audit uses Revo compiler commit
-[`1f95869439fe41da49aab0cce7fa94134ec5ddd4`](https://github.com/if-not-nil/revo/commit/1f95869439fe41da49aab0cce7fa94134ec5ddd4)
+[`d2f16441c1554fec50d0098434223850bc4a1868`](https://github.com/if-not-nil/revo/commit/d2f16441c1554fec50d0098434223850bc4a1868)
 and Tree-sitter CLI 0.26.9. It moved from
 `e94e6d89ddaabb3249b38c1b10df87c700d1e8dc` to
 `f0034ab75aaf49d65bc1b4769987f99380383fcb` on 2026-10-10, when upstream
@@ -16,10 +16,12 @@ changed only its README and wasm build defaults, to
 `9c46813e054381b080ea8a3ea418247dd5912596` on 2026-10-13, when upstream
 changed only its Nix flake, to
 `c9ff2105656803359867a6f13213330ee672d898` on 2026-10-14, when upstream
-changed only a README link, and to the current commit on 2026-10-16, when
-upstream enabled the LSP feature in its Nix package. None of these moves
-changed the lexer, parser or fixtures. The original upstream grammar base is
-`610fa6a4ff0fecd9cc81806e5e85ea61c92091b4`.
+changed only a README link, to
+`1f95869439fe41da49aab0cce7fa94134ec5ddd4` on 2026-10-16, when
+upstream enabled the LSP feature in its Nix package, and to the current commit
+on 2026-10-17, when upstream added LSP to its default native build features.
+None of these moves changed the lexer, parser or fixtures. The original
+upstream grammar base is `610fa6a4ff0fecd9cc81806e5e85ea61c92091b4`.
 
 ## Verified coverage
 
