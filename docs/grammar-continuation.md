@@ -8,7 +8,7 @@ and Idan Gilboa. `extension.toml` pins the reviewed public commit
 updated from `f15165b5391656ed3dcce25e18dbfba4320d80ed`.
 
 The audit uses Revo compiler commit
-[`482ef26f80f7b7b88e3c4b74d20b914a00e6e5f6`](https://github.com/if-not-nil/revo/commit/482ef26f80f7b7b88e3c4b74d20b914a00e6e5f6)
+[`1060fcf44a16a185263b3cb244cca886ac017acc`](https://github.com/if-not-nil/revo/commit/1060fcf44a16a185263b3cb244cca886ac017acc)
 and Tree-sitter CLI 0.26.9. It moved from
 `e94e6d89ddaabb3249b38c1b10df87c700d1e8dc` to
 `f0034ab75aaf49d65bc1b4769987f99380383fcb` on 2026-10-10, when upstream
@@ -20,10 +20,13 @@ changed only a README link, to
 `1f95869439fe41da49aab0cce7fa94134ec5ddd4` on 2026-10-16, when
 upstream enabled the LSP feature in its Nix package, to
 `d2f16441c1554fec50d0098434223850bc4a1868` on 2026-10-17, when
-upstream added LSP to its default native build features, and to the current
-commit on 2026-10-21, when upstream added `dataframe.sort()` to its runtime
-library. None of these moves changed the lexer or parser. The last move added
-one declaration to the `src/baselib/base.rv` fixture, which still parses clean.
+upstream added LSP to its default native build features, to
+`482ef26f80f7b7b88e3c4b74d20b914a00e6e5f6` on 2026-10-21, when
+upstream added `dataframe.sort()` to its runtime library, and to the current
+commit on 2026-10-22, when upstream added `dataframe.row()` and
+`dataframe.filter()`. None of these moves changed the
+lexer or parser. The last two moves added declarations to the
+`src/baselib/base.rv` fixture, which still parses clean.
 The original upstream grammar base is `610fa6a4ff0fecd9cc81806e5e85ea61c92091b4`.
 
 ## Verified coverage
