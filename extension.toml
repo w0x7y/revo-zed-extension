@@ -13,7 +13,7 @@ version = "0.7.0"
 
 [grammars.revo]
 repository = "https://github.com/w0x7y/tree-sitter-revo"
-rev = "cd1bed33767f7dbfbfbc7882e4a18d5ec229030b"
+rev = "f3e076048eef7bb55f5055df510fb54374a1050d"
 
 [language_servers.revolt]
 name = "Revolt"

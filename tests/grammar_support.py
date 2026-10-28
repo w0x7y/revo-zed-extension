@@ -130,7 +130,7 @@ def run_checks(parser):
     if result.returncode:
         raise SystemExit(f"Current syntax must parse cleanly: {result.stdout}")
     lines = fixture.read_text().splitlines()
-    call_line = "let explicit = identity<num>(2)"
+    call_line = "let explicit = identity<number>(2)"
     call_row = lines.index(call_line)
     call_column = call_line.index("identity")
     if not any(
