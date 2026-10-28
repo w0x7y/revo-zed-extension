@@ -9,7 +9,7 @@ let {first, second} = {1, 2}
 test "greeting" do
   greet(person.name)
 end
-suite "examples"
+suite "examples" do end
 let struct = 1
 fn worker() 1
 let job = spawn worker()

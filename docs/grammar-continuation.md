@@ -4,8 +4,8 @@ The maintained grammar is published at
 [w0x7y/tree-sitter-revo](https://github.com/w0x7y/tree-sitter-revo), with all
 54 upstream commits retained and an MIT license crediting doomy, contributors
 and Idan Gilboa. `extension.toml` pins the reviewed public commit
-[`f3e076048eef7bb55f5055df510fb54374a1050d`](https://github.com/w0x7y/tree-sitter-revo/commit/f3e076048eef7bb55f5055df510fb54374a1050d),
-updated from `cd1bed33767f7dbfbfbc7882e4a18d5ec229030b`.
+[`ac6c312026cd5aa4bea73c12f528d047e037f3b2`](https://github.com/w0x7y/tree-sitter-revo/commit/ac6c312026cd5aa4bea73c12f528d047e037f3b2),
+updated from `f3e076048eef7bb55f5055df510fb54374a1050d`.
 
 The audit uses Revo compiler commit
 [`eefa192ea40d918d21630350219789e57fb6e661`](https://github.com/if-not-nil/revo/commit/eefa192ea40d918d21630350219789e57fb6e661)
@@ -62,12 +62,20 @@ while [the compiler reports an invalid interpolation mode](https://github.com/if
 The supported modes are `:v`, `:?` and `:p`; `"#{:d}"` remains valid because
 its expression is a lone atom. Comment extras can also bridge a loop range
 operator, as in `start##gap##..limit`, although the compiler requires literal
-adjacency. The grammar has no bare-call node, so chained bare-call arguments
-such as `f "x" "y"` still parse. Keywords other than `type` and `import` are
-no longer binding names or labels upstream (`let do = 1`, `do/end`), but the
-grammar still reads them as names where no keyword is valid. Malformed
-numbers such as `1__2` also still parse. These are intentional editor
-recoveries; Revolt supplies compiler diagnostics.
+adjacency. These are intentional editor recoveries; Revolt supplies compiler
+diagnostics.
+
+The pin refreshed on 2026-10-28 also rejects the remaining syntax the compiler
+rejects. A same-line string or table after a name or field path is a
+`bare_call` with one argument, and a second
+same-line literal or one after a call result is an error, as in `f "x" "y"` and
+`f(1) "x"`. Keywords other than `type` and `import` cannot be binding names,
+parameters, labels or loop variables (`let do = 1`, `do/end`), while keyword
+member names such as `x.end` remain valid. Numbers follow the compiler's lexer,
+so `1__2`, `1.5.5`, `0X1F` and `00` are errors. A suite needs its `do` body.
+The Zed queries do not capture `bare_call` yet, because they also compile
+against the grammar rebuilt from `patches/tree-sitter-revo.patch`, which
+predates that node; a bare call's name keeps its ordinary name highlight.
 
 Range bounds now use expression nodes for every numeric spelling, retaining the
 named `range` node. Arithmetic stays within its start, step or endpoint, and
@@ -77,10 +85,11 @@ children rather than the opaque tokens used by pin
 The existing Zed queries compile against these structures, preserving numeric
 constant captures and variable captures in computed bounds.
 
-The pinned public grammar passes 191 corpus cases, including complete-program
+The pinned public grammar passes 197 corpus cases, including complete-program
 range and interpolation regressions with explicit editor recovery expectations.
 Separate checks verify 25 expression forms, 19 valid generic calls and 22 rejected
-generic-call forms, comparison trees, lexical nodes and function captures.
+generic-call forms, comparison trees, lexical nodes and function captures, and
+22 valid and 25 rejected programs at the compiler's newer syntax boundaries.
 Unicode atom and receiver checks reject codepoints that could otherwise
 narrow to ASCII in the external scanner. Both native and Wasm parser builds
 pass. Independent fresh generation matches the committed parser, schemas
@@ -102,9 +111,8 @@ Indexed, called or numeric-field receivers retain comparison parsing.
 Comments and ASCII whitespace can separate dotted path segments and generic
 arguments; doc comments inside generic arguments stop speculation. Keyword
 field names are allowed, while bare keyword receivers and keyword generic
-arguments are rejected. The compiler also accepts a parenthesized path
-receiver such as `(identity)<T>(2)`; the grammar keeps comparison parsing for
-that form.
+arguments are rejected. A parenthesized receiver such as `(identity)<T>(2)`
+is also a generic call when its `<` touches the `)`, as in the compiler.
 Sources: [postfix parsing](https://github.com/if-not-nil/revo/blob/eefa192ea40d918d21630350219789e57fb6e661/src/lang/Parser.zig#L630),
 [generic speculation](https://github.com/if-not-nil/revo/blob/eefa192ea40d918d21630350219789e57fb6e661/src/lang/Parser.zig#L2177),
 [type syntax](https://github.com/if-not-nil/revo/blob/eefa192ea40d918d21630350219789e57fb6e661/src/lang/type_syntax.zig),
