@@ -4,7 +4,7 @@ rev = "610fa6a4ff0fecd9cc81806e5e85ea61c92091b4"
 
 [compiler]
 repository = "https://github.com/if-not-nil/revo"
-rev = "eefa192ea40d918d21630350219789e57fb6e661"
+rev = "7b91491e7d0b0b8f164ff80ebd4b750ec5322f99"
 
 [compiler.expected_invalid]
 "issues/match.rv" = "Historical issue fixture: ..rest table patterns and range match patterns are rejected by the audited compiler. Supported keyed and arithmetic match arms have separate corpus regressions."

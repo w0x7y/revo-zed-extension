@@ -8,7 +8,7 @@ and Idan Gilboa. `extension.toml` pins the reviewed public commit
 updated from `f3e076048eef7bb55f5055df510fb54374a1050d`.
 
 The audit uses Revo compiler commit
-[`eefa192ea40d918d21630350219789e57fb6e661`](https://github.com/if-not-nil/revo/commit/eefa192ea40d918d21630350219789e57fb6e661)
+[`7b91491e7d0b0b8f164ff80ebd4b750ec5322f99`](https://github.com/if-not-nil/revo/commit/7b91491e7d0b0b8f164ff80ebd4b750ec5322f99)
 and Tree-sitter CLI 0.26.9. It moved from
 `e94e6d89ddaabb3249b38c1b10df87c700d1e8dc` to
 `f0034ab75aaf49d65bc1b4769987f99380383fcb` on 2026-10-10, when upstream
@@ -24,9 +24,11 @@ upstream added LSP to its default native build features, to
 `482ef26f80f7b7b88e3c4b74d20b914a00e6e5f6` on 2026-10-21, when
 upstream added `dataframe.sort()` to its runtime library, to
 `1060fcf44a16a185263b3cb244cca886ac017acc` on 2026-10-22, when upstream
-added `dataframe.row()` and `dataframe.filter()`, and to the current commit
-on 2026-10-28. None of the earlier moves changed the lexer or parser.
-The current commit removes the `num` and `int` type aliases. Its parent,
+added `dataframe.row()` and `dataframe.filter()`, to
+`eefa192ea40d918d21630350219789e57fb6e661` on 2026-10-28, and to the current
+commit on 2026-11-06, when upstream added fix suggestions to lexer errors
+without changing the syntax it accepts. Only the move to `eefa192` changed the
+grammar. That commit removes the `num` and `int` type aliases, and its parent,
 [`8680d687a0ea04e1738c5d1e67ce0863134cc677`](https://github.com/if-not-nil/revo/commit/8680d687a0ea04e1738c5d1e67ce0863134cc677),
 rewrites the lexer and parser around a concrete syntax tree and removes
 macros.
@@ -43,7 +45,8 @@ fixture explicitly marks both unfinished. The grammar retains its error,
 and `tests/compatibility.toml` records this exception rather than silently
 excluding it from the result.
 
-The compiler audit and public grammar pin were refreshed on 2026-10-28.
+The public grammar pin was refreshed on 2026-10-28 for `eefa192`, and the
+compiler audit on 2026-11-06.
 `macro`, `proc` and `skip` are now ordinary names, so the grammar has no
 macro, procedural macro or quasiquote nodes and a backtick is a syntax error;
 `skip` still marks `test/skip`. A trailing `!` is part of an ordinary call
