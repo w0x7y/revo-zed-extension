@@ -1,6 +1,6 @@
 id = "revo"
 name = "Revo"
-version = "0.0.1"
+version = "0.0.2"
 schema_version = 1
 description = "Revo language support with syntax highlighting and the Revolt language server."
 authors = ["matthew <mattifex@gmail.com>", "Idan Gilboa <idangilb@gmail.com>"]
@@ -13,7 +13,7 @@ version = "0.7.0"
 
 [grammars.revo]
 repository = "https://github.com/w0x7y/tree-sitter-revo"
-rev = "ac6c312026cd5aa4bea73c12f528d047e037f3b2"
+rev = "e21a027cdb987617137e0a0a499558fb6df3447e"
 
 [language_servers.revolt]
 name = "Revolt"

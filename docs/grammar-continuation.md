@@ -4,8 +4,9 @@ The maintained grammar is published at
 [w0x7y/tree-sitter-revo](https://github.com/w0x7y/tree-sitter-revo), with all
 54 upstream commits retained and an MIT license crediting doomy, contributors
 and Idan Gilboa. `extension.toml` pins the reviewed public commit
-[`ac6c312026cd5aa4bea73c12f528d047e037f3b2`](https://github.com/w0x7y/tree-sitter-revo/commit/ac6c312026cd5aa4bea73c12f528d047e037f3b2),
-updated from `f3e076048eef7bb55f5055df510fb54374a1050d`.
+[`e21a027cdb987617137e0a0a499558fb6df3447e`](https://github.com/w0x7y/tree-sitter-revo/commit/e21a027cdb987617137e0a0a499558fb6df3447e),
+updated from `ac6c312026cd5aa4bea73c12f528d047e037f3b2`. The new commit only sets
+the grammar version to 0.1.1.
 
 The audit uses Revo compiler commit
 [`7b91491e7d0b0b8f164ff80ebd4b750ec5322f99`](https://github.com/if-not-nil/revo/commit/7b91491e7d0b0b8f164ff80ebd4b750ec5322f99)
