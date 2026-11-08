@@ -5,6 +5,3 @@ tree-sitter-revo/
 
 # Python checker bytecode.
 /tests/__pycache__/
-
-# graft's local graph cache — regenerable, not committed (run `graft build`).
-/graft/
