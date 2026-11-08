@@ -90,6 +90,7 @@ label: (ident) @label
   "spawn"
   "comp"
   "import"
+  "use"
   "type"
   (directive)
 ] @keyword

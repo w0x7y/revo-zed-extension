@@ -3,8 +3,8 @@
 [revo](https://revo.lung.fyi) in [zed](https://zed.dev).
 
 syntax highlighting for `.rv` and `.revo` files.
-completion, hover, diagnostics, go to definition, and rename through revolt,
-the language server bundled with revo.
+completion, hover, diagnostics, go to definition, rename, and formatting through
+revolt, the language server bundled with revo.
 
 ## install
 
@@ -80,7 +80,8 @@ replace the path with your revo executable. keep `"arguments": ["lsp"]`;
 zed doesn't add it when you set a path. `lsp.revolt.binary.env` sets environment variables.
 
 update revo to update revolt. check your version with `revo version`.
-revolt doesn't provide a formatter.
+revolt also formats code, the same way `revo fmt` does. zed uses it when you
+run `editor: format` and when it formats on save.
 
 optional: let revolt help color your code. add this to your existing zed settings:
 

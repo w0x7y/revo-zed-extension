@@ -1,23 +1,49 @@
 diff --git a/grammar.js b/grammar.js
-index 59e2572..c7ac8af 100644
+index 59e2572..96ca030 100644
 --- a/grammar.js
 +++ b/grammar.js
-@@ -24,6 +24,14 @@ function repeat_comma(rule) {
+@@ -21,11 +21,39 @@ function repeat_comma(rule) {
+   return optional(repeat_comma1(rule));
+ }
+ 
++function binary($, operand) {
++  return seq(field('left', operand), $.operator, field('right', operand));
++}
++
++function unary($, operand) {
++  return seq(alias(token('-'), $.operator), operand);
++}
++
  const IDENT_SNAKE = /[a-z_][a-zA-Z0-9_]*/;
- const IDENT_MACRO = /[a-z_][a-zA-Z0-9_]*\??\!/;
+-const IDENT_MACRO = /[a-z_][a-zA-Z0-9_]*\??\!/;
  const IDENT_PASCAL = /[A-Z_][a-zA-Z0-9_]*/;
++// Compiler names end with at most one `?` or `!`.
++const SUFFIXED_NAME = /[A-Za-z_][A-Za-z0-9_]*[?!]?/;
++// A final `?` stays the optional_type suffix.
++const BANG_NAME = /[A-Za-z_][A-Za-z0-9_]*!?/;
 +// The compiler accepts every keyword as a contextual record or signature name.
 +const TYPE_NAME_KEYWORDS = [
-+  'const', 'let', 'macro', 'test', 'suite', 'skip', 'type', 'fn', 'if',
-+  'unless', 'else', 'match', 'when', 'do', 'end', 'loop', 'for', 'while',
-+  'global', 'in', 'break', 'continue', 'return', 'import', 'spawn', 'yield',
-+  'and', 'or', 'not', 'band', 'bor', 'bxor', 'shl', 'shr', 'comp', 'proc',
-+  'orelse', 'pub', 'declare',
++  'const', 'let', 'test', 'suite', 'type', 'fn', 'if', 'unless', 'else',
++  'match', 'when', 'do', 'end', 'loop', 'for', 'while', 'global', 'in',
++  'break', 'continue', 'return', 'import', 'spawn', 'yield', 'and', 'or',
++  'not', 'band', 'bor', 'bxor', 'shl', 'shr', 'comp', 'orelse', 'pub',
++  'declare', 'use',
 +];
++// Upstream binding names, labels and loop variables reject every keyword but
++// `type`, a baselib global.
++const RESERVED_KEYWORDS = TYPE_NAME_KEYWORDS.filter(word => word !== 'type');
  export default grammar({
    name: "revo",
++  word: $ => $.ident,
++  reserved: {
++    global: $ => RESERVED_KEYWORDS,
++    // Member names after `.` or `:` accept every keyword, as the compiler does.
++    member: $ => [],
++  },
    extras: $ => [
-@@ -34,19 +42,21 @@ export default grammar({
+     /\s/,
+     $.documentation,
+@@ -34,23 +62,38 @@ export default grammar({
      $.module_doc,
      $.suite,
      $.test,
@@ -27,43 +53,90 @@ index 59e2572..c7ac8af 100644
      $.documentation,
      $.atom,
      $.string,
-     $.range,
+-    $.range,
 +    $._generic_receiver,
-+    $._open_range_dots,
-+    $._closed_range_dots,
++    $._open_range_end,
 +    $._generic_path_head,
 +    $._generic_path_receiver,
++    $._bare_arg,
++    $._bare_arg_rejected,
++    $._paren_generic,
++    // Never valid in a rule; marks error recovery and malformed numbers.
++    $._error_sentinel,
    ],
 -  // conflicts: $ => [
 -  //   [ $.ident, $.type ]
 -  // ],
-+
++  conflicts: $ => [[$._expression, $._range_bound], [$.range], [$._ident, $._member_name]],
    rules: {
 -    source: $ => repeat($._expression),
 +    source: $ => repeat(choice($._expression, ';')),
      expression: $ => prec.left($._expression),
      _not: $ => token('not'),
      _expression: $ => prec.left(3, choice(
-@@ -69,6 +79,7 @@ export default grammar({
+-      $.ident,
++      $._primary_expression, $.operation_expression, $.unary_expression, $.range,
++    )),
++    // Bounds stop at unparenthesized dots. Grouping keeps the ordinary
++    // expression interface so explicitly nested ranges remain possible.
++    _range_bound: $ => prec.left(3, choice(
++      $._primary_expression,
++      alias($._range_operation, $.operation_expression),
++      alias($._range_unary, $.unary_expression),
++    )),
++    _primary_expression: $ => prec.left(3, choice(
++      $._ident,
+       $.self,
+       $.directive,
+       $.do_block,
+@@ -58,8 +101,6 @@ export default grammar({
+       $.conditional_expression,
+       $.while_expression,
+       $.loop_expression,
+-      $.operation_expression,
+-      $.unary_expression,
+       $.for_loop_expression,
+       $.comp_expression,
+       $.union_expression,
+@@ -69,9 +110,8 @@ export default grammar({
        $.match,
        $.function,
        $.function_call,
+-      $.macro,
+-      $.macro_call,
+-      $.proc_macro,
++      $.bare_call,
 +      $._generic_path_call,
-       $.macro,
-       $.macro_call,
-       $.proc_macro,
-@@ -85,7 +96,10 @@ export default grammar({
+       $.table,
+       $.return,
+       $._table_type,
+@@ -80,12 +120,14 @@ export default grammar({
+       $.spawn,
+       $.break,
+       $.continue,
+-      $.capture,
+       $.yield,
        $._scoped_expression,
        seq($._not, $._expression),
        $.declaration,
+-      $.range,
 +      $.ambient_declaration,
 +      $.import,
-       $.range,
++      $.use,
 +      $._try_expression,
      )),
      declaration: $ => prec.right(seq(
        choice(
-@@ -111,10 +125,10 @@ export default grammar({
+@@ -94,7 +136,7 @@ export default grammar({
+         'global',
+       ),
+       field('pattern',choice(
+-        $.ident,
++        $._ident,
+         $.table,
+       )),
+       optional(seq(
+@@ -111,25 +153,22 @@ export default grammar({
        field('consequence', $.expression),
        optional(seq('else', field('alternative', $.expression))))),
      operator: $ => $._operator,
@@ -71,22 +144,29 @@ index 59e2572..c7ac8af 100644
 -      $.operator,
 -      $.number,
 -    ),
-+    unary_expression: $ => prec.right(5, seq(
-+      alias(token('-'), $.operator),
-+      $._expression,
-+    )),
++    unary_expression: $ => prec.right(5, unary($, $._expression)),
++    _range_unary: $ => prec.right(5, unary($, $._range_bound)),
      yield: $ => token('yield'),
      comp_expression: $ => prec(4, seq(
        'comp',
-@@ -125,6 +139,7 @@ export default grammar({
+       field('body', $._expression),
+     )),
+-    _operator: $ => prec(2, token(choice(
++    _operator: $ => prec(2, choice('-', token(choice(
+       '=',
        '+',
-       '-',
+-      '-',
        '*',
 +      '*=',
        '^',
        '^=',
        '/',
-@@ -141,6 +156,7 @@ export default grammar({
+       '%',
+-      '=',
+       '+=',
+       '-=',
+       '/=',
+@@ -141,6 +180,7 @@ export default grammar({
        '>=',
        '!=',
        '~',
@@ -94,42 +174,72 @@ index 59e2572..c7ac8af 100644
        '|>',
        '//',
        'band',
-@@ -149,14 +165,21 @@ export default grammar({
+@@ -149,87 +189,167 @@ export default grammar({
        'shl',
        'shr',
        'orelse',
+-    ))),
 +      'and',
 +      'or',
-     ))),
++    )))),
  
      // Identifiers
-     ident: $ => choice(IDENT_SNAKE, IDENT_PASCAL),
+-    ident: $ => choice(IDENT_SNAKE, IDENT_PASCAL),
 -    optional_type: $ =>  prec(2, seq($._type_or_primitive_or_optional, '?')),
-+    optional_type: $ =>  prec(2, seq(choice($._type_or_primitive_or_optional, $.ident, alias(/[A-Za-z_][A-Za-z0-9_!?]*[A-Za-z0-9_!]/, $.ident)), '?')),
++    // Keywords are lowercase, so the lowercase spelling is the keyword token.
++    // Keeping it visible lets error recovery report a missing name.
++    ident: $ => IDENT_SNAKE,
++    _ident: $ => choice($.ident, alias(IDENT_PASCAL, $.ident)),
++    // Reserved word sets apply to the token step, so member contexts spell out
++    // both identifier terminals instead of referring to the _ident rule.
++    _member_name: $ => reserved('member', choice($.ident, alias(IDENT_PASCAL, $.ident))),
++    _member_call: $ => prec(4, seq(
++      field('name', choice(
++        seq($._member_name, optional(choice('?', '!'))),
++        alias(prec(4, seq($._member_name, $.index)), $._identifier_indexed),
++      )),
++      alias($._call_parameters, $.parameters),
++      optional($._bare_chain),
++    )),
++    optional_type: $ =>  prec(2, seq(choice($._type_or_primitive_or_optional, $._ident, alias(BANG_NAME, $.ident)), '?')),
      type: $ => prec(1, IDENT_PASCAL),
      _type_or_primitive_or_optional: $ => prec.left(choice($.optional_type, $.type, $.primitive)),
 -    import: $ => seq('import', $.string),
-+    import: $ => seq('import', choice($.string, $.import_group)),
-+    import_group: $ => seq('{', repeat_comma(choice(
-+      $.string,
-+      $.import_binding,
-+    )), '}'),
-+    import_binding: $ => seq(field('name', $.ident), '=', field('path', $.string)),
++    // `import "x"` and `import("x")` take a plain string path. `use` also binds
++    // the path's stem; Revolt reports interpolated paths and stems that aren't names.
++    import: $ => seq('import', $._import_path),
++    use: $ => seq('use', $._import_path),
++    _import_path: $ => choice($.string, seq('(', $.string, ')')),
      self: $ => token('self'),
      // function_ident: $ => prec(1, seq(
      //   choice(IDENT_SNAKE, alias($.primitive, 'hidden')),
-@@ -166,7 +189,9 @@ export default grammar({
-       choice($._expression, $.index, $.range),
+     //   optional('?'))),
+     index: $ => seq(
+       '[',
+-      choice($._expression, $.index, $.range),
++      choice($._expression, $.index, alias($._slice, $.range)),
        ']'
      ),
 -    _indexed: $ => prec(4, seq($.ident, $.index)),
-+    _identifier_indexed: $ => prec(4, seq($.ident, $.index)),
++    // Slice bounds are independent of loop adjacency and may be omitted.
++    _slice: $ => prec(4, seq(
++      optional($._range_bound), $._slice_dots, optional(seq(
++        $._range_bound, optional(seq($._slice_dots, optional($._range_bound))),
++      )),
++    )),
++    // Both lexer symbols can win at touching dots while expression and slice
++    // paths coexist. Slices accept either, including the whitespace form.
++    _slice_dots: $ => prec(4, choice('..', token.immediate('..'))),
++    _identifier_indexed: $ => prec(4, seq($._ident, $.index)),
 +    _indexed: $ => choice($._identifier_indexed, prec.left(5, seq($._expression, $.index))),
 +    _try_expression: $ => prec.left(5, seq($._expression, '?')),
      _pub: $ => token('pub'),
      visibility_modifier: $ => $._pub,
      _do: $ => seq(token('do'), field('label', optional($._label))),
-@@ -176,27 +201,37 @@ export default grammar({
+     _loop: $ => seq(token('loop'), field('label', optional($._label))),
+     _while: $ => seq(token('while'), field('label', optional($._label))),
+-    _label: $ => seq('/', $.ident),
++    _label: $ => seq('/', $._ident),
      _break_return: $ => field('label', seq($._label, '(', field('condition', $._expression), ')',)),
      _end: $ => token('end'),
      // Basic types
@@ -166,36 +276,79 @@ index 59e2572..c7ac8af 100644
      function: $ => prec(4, seq(
        optional($.visibility_modifier),
        'fn',
-       optional(seq(field('name', seq($.ident, repeat(seq(choice(':', '.'), $.ident)))), optional('?'))),
+-      optional(seq(field('name', seq($.ident, repeat(seq(choice(':', '.'), $.ident)))), optional('?'))),
++      optional(seq(field('name', seq($._ident, repeat(seq(choice(':', '.'), $._member_name)))), optional('?'))),
 +      optional($._generics),
        $.parameters,
        optional(field('return_type', $.return_type)),
        field('body', choice($.expression, $.table, $.do_block)),
-@@ -216,17 +251,50 @@ export default grammar({
-       choice($.expression, $.do_block)
-     ),
-     capture: $ => /`[^`]*`/,
+     )),
+-    macro: $ => seq(
+-      optional($.visibility_modifier),
+-      'macro',
+-      alias(IDENT_MACRO, $.ident),
+-      $.capture,
+-      $.capture,
+-    ),
+-    proc_macro: $ => seq(
+-      optional($.visibility_modifier),
+-      'proc',
+-      field('name', alias(IDENT_MACRO, $.ident)),
+-      field('parameters', $.parameters),
+-      choice($.expression, $.do_block)
+-    ),
+-    capture: $ => /`[^`]*`/,
 -    return_type: $ => seq(
 +    return_type: $ => prec.right(5, seq(
        '->',
        $._revo_type,
-+    )),
-+    _call_generic_ident: $ => alias(/[A-Za-z_][A-Za-z0-9_!?]*/, $.ident),
-+    _call_generics: $ => seq(
-+      '<',
-+      repeat_comma($._call_generic_ident),
-+      '>',
-     ),
+-    ),
 -    function_call: $ => prec(4, seq(
-+    function_call: $ => choice($._ordinary_function_call, $._generic_function_call, $._postfix_function_call),
-+    // Statement prefixes consume their own values/bodies; parentheses expose
-+    // those results as callees without taking arguments away from `break`.
-+    _postfix_function_call: $ => prec.left(6, seq(
-       field('name', choice(
+-      field('name', choice(
 -        seq($.ident, optional('?')),
 -        $._indexed,)),
 -      $.parameters,
 -      optional('?'),
+     )),
+-    macro_call: $ => seq(
+-      field('name', alias(IDENT_MACRO, $.ident)),
+-      $.macro_parameters,
++    _call_generic_ident: $ => alias(SUFFIXED_NAME, $.ident),
++    _call_generics: $ => seq(
++      '<',
++      repeat_comma($._call_generic_ident),
++      '>',
++    ),
++    function_call: $ => seq(
++      choice(
++        $._ordinary_function_call, $._generic_function_call,
++        $._paren_generic_function_call, $._postfix_function_call,
++      ),
++      optional($._bare_chain),
++    ),
++    // `(f)<T>(x)`: the compiler unwraps parentheses around a generic receiver.
++    // The scanner requires `<` to touch `)` and `>(` to follow the type names.
++    _paren_generic_function_call: $ => prec(4, seq(
++      field('name', $._association),
++      $._paren_generic,
++      $._call_generics,
++      alias($._call_parameters, $.parameters),
++    )),
++    // `f "x"` and `f.g {1}` take exactly one same-line string or table.
++    bare_call: $ => prec.left(seq(
++      field('name', choice($._ident, $._scoped_expression)),
++      $._bare_arg,
++      field('argument', choice($.string, $.table)),
++      optional($._bare_chain),
++    )),
++    // A second bare argument, or one after a call result, is a syntax error
++    // upstream. This marker is never produced; where it is valid, the scanner
++    // turns a same-line string or table into an error.
++    _bare_chain: $ => $._bare_arg_rejected,
++    // Statement prefixes consume their own values/bodies; parentheses expose
++    // those results as callees without taking arguments away from `break`.
++    _postfix_function_call: $ => prec.left(6, seq(
++      field('name', choice(
 +        $._association, $.function_call, $._indexed, $._scoped_expression,
 +        $._try_expression, $.table, $.number, $.string, $.atom, $.self, $.do_block,
 +      )),
@@ -203,11 +356,11 @@ index 59e2572..c7ac8af 100644
 +    )),
 +    _ordinary_function_call: $ => prec(4, seq(
 +      choice(
-+        field('name', seq($.ident, optional('?'))),
++        field('name', seq($._ident, optional(choice('?', '!')))),
 +        field('name', $._identifier_indexed),
 +      ),
 +      alias($._call_parameters, $.parameters),
-     )),
++    )),
 +    _generic_function_call: $ => prec(4, seq(
 +      field('name', alias($._generic_receiver, $.ident)),
 +      $._call_generics,
@@ -222,31 +375,29 @@ index 59e2572..c7ac8af 100644
 +      field('name', alias($._generic_path_receiver, $.ident)), $._call_generics, alias($._call_parameters, $.parameters),
 +    )),
 +    _generic_scoped: $ => seq(
-+      repeat(seq('.', $.ident)),
++      repeat(seq('.', $._member_name)),
 +      '.', alias($._path_generic_function_call, $.function_call),
-+    ),
-     macro_call: $ => seq(
-       field('name', alias(IDENT_MACRO, $.ident)),
-       $.macro_parameters,
-@@ -240,10 +308,15 @@ export default grammar({
+     ),
+     parameters: $ => seq(
+       '(',
+@@ -240,11 +360,11 @@ export default grammar({
        ))),
        ')'
      ),
+-    macro_parameters: $ => seq(
+-      '(',
+-      $.expression,
+-      repeat(seq(',', $.expression)),
+-      ')',
 +    _call_parameters: $ => seq(
 +      token.immediate('('),
 +      optional($.self),
-+      optional(prec(4, seq($.parameter, repeat(seq(',', $.parameter))))),
++      optional(prec(4, seq($.parameter, repeat(seq(',', $.parameter)), optional(',')))),
 +      ')'
-+    ),
-     macro_parameters: $ => seq(
-       '(',
--      $.expression,
--      repeat(seq(',', $.expression)),
-+      repeat_comma($.expression),
-       ')',
      ),
      parameter: $ => seq(
-@@ -256,7 +329,7 @@ export default grammar({
+       // Marks paramater as optional
+@@ -256,7 +376,7 @@ export default grammar({
        optional(
          seq(
            '=',
@@ -255,12 +406,32 @@ index 59e2572..c7ac8af 100644
          ),
        ),
      ),
-@@ -323,36 +396,70 @@ export default grammar({
+@@ -301,17 +421,15 @@ export default grammar({
+       /@[^a-zA-Z_]/,  // @ not followed by an identifier start
+     ))),
+ 
+-    directive: $ => seq('@', $.ident),
+-    suite: $ => seq('suite', $.string),
++    directive: $ => seq('@', $._ident),
++    suite: $ => seq('suite', field('name', $.string), field('body', $.do_block)),
+     test: $ => seq(
+       'test',
+       optional(seq('/', 'skip')),
+       field("name", $.string),
+       field("body", $.do_block)),
+     primitive: $ => seq(choice(
+-      'num',
+       'number',
+-      'int',
+       'string',
+       'atom',
+       'function',
+@@ -323,91 +441,171 @@ export default grammar({
      type_expression: $ => seq(
        optional($.visibility_modifier),
        'type',
 -      field('type', $.type),
-+      field('type', seq(choice($.type, $.ident), repeat(seq('.', choice($.type, $.ident))))),
++      field('type', seq(choice($.type, $._ident), repeat(seq('.', choice($.type, $._member_name))))),
 +      optional($._generics),
        '=',
        field('value', $._revo_type),
@@ -286,7 +457,7 @@ index 59e2572..c7ac8af 100644
 +    ambient_declaration: $ => seq(
 +      optional($.visibility_modifier),
 +      'declare',
-+      field('name', seq(choice($.ident, alias(choice('type', 'import'), $.ident)), repeat(seq('.', $.ident)))),
++      field('name', seq(choice($._ident, alias('type', $.ident)), repeat(seq('.', $._member_name)))),
 +      optional($._generics),
 +      '=',
 +      field('value', $._revo_type),
@@ -307,10 +478,10 @@ index 59e2572..c7ac8af 100644
 +      optional('...'),
 +    ),
 +    _contextual_type_name: $ => prec(4, alias(choice(...TYPE_NAME_KEYWORDS, 'self'), $.ident)),
-+    _type_ident: $ => choice($._named_type_ident, alias(/[A-Za-z_][A-Za-z0-9_!?]*/, $.ident), alias(choice('num', 'number', 'int', 'string', 'atom', 'function', 'any', 'table'), $.ident), $._contextual_type_name),
++    _type_ident: $ => choice($._named_type_ident, alias(SUFFIXED_NAME, $.ident), alias(choice('number', 'string', 'atom', 'function', 'any', 'table'), $.ident), $._contextual_type_name),
 +    // Keep a final '?' as the existing optional_type suffix, while admitting
-+    // compiler identifier continuations such as 'number!' and 'a?b'.
-+    _named_type_ident: $ => choice($.ident, alias(/[A-Za-z_][A-Za-z0-9_!?]*[A-Za-z0-9_!]/, $.ident), alias(choice('import', 'type'), $.ident)),
++    // compiler names such as 'number!'.
++    _named_type_ident: $ => choice($._ident, alias(BANG_NAME, $.ident), alias('type', $.ident)),
 +    parameterized_type: $ => prec(5, seq(field('name', choice($.type, $._named_type_ident)), $._type_arguments)),
 +    qualified_type: $ => prec.right(5, seq(field('module', $._named_type_ident), '.', field('name', choice($.type, $._named_type_ident)), optional('?'))),
 +    grouped_type: $ => seq('(', $._revo_type, ')'),
@@ -347,26 +518,42 @@ index 59e2572..c7ac8af 100644
      continue: $ => seq('continue', optional(field('label', $._label))),
      return: $ => prec.right(seq(
        'return',
-@@ -363,51 +470,89 @@ export default grammar({
-       $.operator,
-       field('right', $._expression),
+       field('body', $._expression),
      )),
-+    _for_range: $ => prec.left(2, seq(
-+      optional($._expression),
-+      choice(
-+        $._open_range_dots,
-+        seq($._closed_range_dots, $._expression, optional(choice(
-+          $._open_range_dots, seq($._closed_range_dots, $._expression),
-+        ))),
-+      ),
-+    )),
+-    operation_expression: $ => prec.left(1, seq(
+-      field('left', $._expression),
+-      $.operator,
+-      field('right', $._expression),
++    operation_expression: $ => prec.left(1, binary($, $._expression)),
++    _range_operation: $ => prec.left(1, binary($, $._range_bound)),
++    // Every spelling uses expression bounds. A lexical integer-range shortcut
++    // would hide the dots before precedence can keep arithmetic inside bounds.
++    range: $ => choice(
++      prec.dynamic(3, prec.left(0, seq(
++        $._range_bound, token.immediate('..'), $._range_bound,
++        token.immediate('..'), $._range_bound,
++      ))),
++      prec.dynamic(1, prec.left(0, seq(
++        $._range_bound, token.immediate('..'), $._range_bound,
++      ))),
++    ),
++    _for_range: $ => prec.left(0, seq(
++      choice('..', seq($._range_bound, token.immediate('..'))),
++      choice($._open_range_end, seq(
++        $._range_bound,
++        optional(seq(token.immediate('..'), choice($._open_range_end, $._range_bound))),
++      )),
+     )),
      _space: $ => token(/\s/),
      table: $ => seq(
        '{',
-       optional(repeat_comma(choice($.field, $.ident, $._expression))),
+-      optional(repeat_comma(choice($.field, $.ident, $._expression))),
++      optional(repeat_comma(choice($.field, alias($._keyword_field, $.field), $._ident, $._expression))),
        '}',
      ),
 -    _type_assignment: $ => seq(':', $._space, field('type', $._revo_type)),
++    // `{end = 1}`: a keyword directly before `=` is a key, as after a `.`.
++    _keyword_field: $ => prec(2, seq(field('name', alias(choice(...TYPE_NAME_KEYWORDS), $.ident)), $._assignment)),
 +    _type_assignment: $ => seq(':', field('type', $._revo_type)),
      _assignment: $ => seq('=', field('value', $._expression)),
      field: $ => prec(1, seq(
@@ -403,7 +590,7 @@ index 59e2572..c7ac8af 100644
 +      // Legacy positional type names have ident nodes, including primitives.
 +      alias($.primitive, $.ident),
 +      $._named_type_ident,
-+      alias(/[A-Za-z_][A-Za-z0-9_!?]*/, $.ident),
++      alias(SUFFIXED_NAME, $.ident),
 +      $.atom,
 +      $.string,
 +      $.number,
@@ -449,16 +636,16 @@ index 59e2572..c7ac8af 100644
        'for',
 -      $.ident,
 +      optional(field('label', $._label)),
-+      repeat_comma1($.ident),
++      repeat_comma1($._ident),
        'in',
 -      choice($.range, $.ident),
 -      $.expression
-+      field('iterator', choice($._expression, alias($._for_range, $.range))),
++      field('iterator', choice($._range_bound, alias($._for_range, $.range))),
 +      field('body', $.expression)
      )),
      while_expression: $ => seq(
        $._while,
-@@ -418,13 +563,13 @@ export default grammar({
+@@ -418,13 +616,13 @@ export default grammar({
        $._loop,
        field('body', $.expression),
      ),
@@ -470,13 +657,13 @@ index 59e2572..c7ac8af 100644
            choice(
 -            seq('.', choice($.function_call, $.ident, $.integer)),
 -            seq(':', $.function_call),
-+            seq('.', choice(alias($._ordinary_function_call, $.function_call), $.macro_call, $.ident, $.integer)),
-+            seq(':', alias($._ordinary_function_call, $.function_call)),
++            seq('.', choice(alias($._member_call, $.function_call), $._member_name, $.integer)),
++            seq(':', alias($._member_call, $.function_call)),
            ),
            optional($.index),
          )
 diff --git a/queries/highlights.scm b/queries/highlights.scm
-index 370c566..650771b 100644
+index 370c566..7bdbda4 100644
 --- a/queries/highlights.scm
 +++ b/queries/highlights.scm
 @@ -1,16 +1,28 @@
@@ -510,7 +697,7 @@ index 370c566..650771b 100644
  (optional_type
    ("?") @punctuation)
  (result_type
-@@ -18,45 +30,47 @@
+@@ -18,45 +30,45 @@
  
  (table
    (field
@@ -535,30 +722,35 @@ index 370c566..650771b 100644
 -  (parameter
 -    (ident)? @variable.parameter)
 -    ("?")? @operator)
++; The called name sits directly before the argument; `f.g "x"` calls `g`.
++(bare_call
++  name: (ident) @function
++  .
++  argument: (_))
+ 
+-; macros
+-(macro
+-  ("macro") @keyword
+-  (ident) @function.macro
+-  (capture) @string.regexp)
+-(proc_macro
+-  ("proc") @keyword
+-  (ident) @function.macro
++(bare_call
++  (scoped
++    (ident) @function .)
++  .
++  argument: (_))
++
 +(function
-+  (parameters
-+    (parameter
+   (parameters
+     (parameter
+-      name: (ident)? @variable.parameter)))
+-(macro_call
+-  (ident) @function.macro)
 +      name: (ident) @variable.parameter)))
 +
 +(parameter "?" @operator)
- 
- ; macros
- (macro
-   ("macro") @keyword
--  (ident) @function.macro
--  (capture) @string.regexp)
-+  (ident) @function
-+  (capture) @string.regex)
- (proc_macro
-   ("proc") @keyword
--  (ident) @function.macro
-+  (ident) @function
-   (parameters
-     (parameter
-       name: (ident)? @variable.parameter)))
- (macro_call
--  (ident) @function.macro)
-+  (ident) @function)
  
  ; control flow
 -(return ("return" @keyword.control.return))
@@ -572,7 +764,7 @@ index 370c566..650771b 100644
  
  ; the inside of the mod doc
  ; keep this blank because it's supposed to keep markdown text white
-@@ -73,20 +87,23 @@
+@@ -73,20 +85,24 @@
  (shebang) @keyword
  
  ; tests
@@ -598,10 +790,11 @@ index 370c566..650771b 100644
    "spawn"
 +  "comp"
 +  "import"
++  "use"
    "type"
    (directive)
  ] @keyword
-@@ -105,7 +122,7 @@ label: (ident) @label
+@@ -105,7 +121,7 @@ label: (ident) @label
    "loop"
    "continue"
    "break"
@@ -610,7 +803,7 @@ index 370c566..650771b 100644
  [
    "?"
    "!"
-@@ -120,9 +137,14 @@ label: (ident) @label
+@@ -120,9 +136,15 @@ label: (ident) @label
    "|"
    "->"
    "=>"
@@ -618,6 +811,7 @@ index 370c566..650771b 100644
 +] @punctuation.bracket
  [
    "."
++  ".."
    ":"
    ","
 +  "..."
@@ -627,10 +821,10 @@ index 370c566..650771b 100644
 +"declare" @keyword
 +(function_signature (parameters (parameter name: (ident) @variable.parameter)))
 diff --git a/src/scanner.c b/src/scanner.c
-index 2761703..f92a203 100644
+index 2761703..ee61bb3 100644
 --- a/src/scanner.c
 +++ b/src/scanner.c
-@@ -1,26 +1,115 @@
+@@ -1,72 +1,380 @@
  #include "tree_sitter/parser.h"
  #include <stdbool.h>
 -// #include "tree_sitter/alloc.h"
@@ -656,20 +850,29 @@ index 2761703..f92a203 100644
  
 -static bool is_valid_atom(char c) {
 -  return is_alpha(c) || (c == '_') || (c == '-') || (c == '+') || (c == '*') ||
-+static bool is_valid_atom(int32_t c) {
-+  return is_alpha_num(c) || (c == '_') || (c == '-') || (c == '+') || (c == '*') ||
-          (c == '/') || (c == '=') || (c == '<') || (c == '>') || (c == '.') ||
-          (c == '@') || (c == '$') || (c == '~') || (c == '^') || (c == '?') ||
-          (c == '!');
+-         (c == '/') || (c == '=') || (c == '<') || (c == '>') || (c == '.') ||
+-         (c == '@') || (c == '$') || (c == '~') || (c == '^') || (c == '?') ||
+-         (c == '!');
++static bool is_symbol_atom(int32_t c) {
++  return (c == '-') || (c == '+') || (c == '*') || (c == '/') || (c == '=') ||
++         (c == '<') || (c == '>') || (c == '.') || (c == '@') || (c == '$') ||
++         (c == '~') || (c == '^') || (c == '?') || (c == '!');
  }
  
+-// Match a number (positive or negative) or return false if no number is matched
+-static bool match_number(TSLexer *lexer) {
+-  if (lexer->lookahead == '-' || is_num(lexer->lookahead)) {
+-    if (lexer->lookahead == '-') {
+-      lexer->advance(lexer, false);
+-    }
+-    if (is_num(lexer->lookahead)) {
 +// Match lexer identifiers while excluding reserved words, without limiting name length.
 +static const char *KEYWORDS[] = {
-+  "const", "global", "let", "comp", "proc", "macro", "test", "suite",
-+  "skip", "type", "fn", "if", "unless", "else", "match", "when", "do",
-+  "end", "loop", "for", "while", "in", "break", "continue", "return",
-+  "import", "spawn", "yield", "and", "or", "not", "band", "bor", "bxor",
-+  "shl", "shr", "orelse", "pub", "declare",
++  "const", "global", "let", "comp", "test", "suite", "type", "fn", "if",
++  "unless", "else", "match", "when", "do", "end", "loop", "for", "while",
++  "in", "break", "continue", "return", "import", "spawn", "yield", "and",
++  "or", "not", "band", "bor", "bxor", "shl", "shr", "orelse", "pub",
++  "declare", "use",
 +};
 +
 +static bool match_identifier(TSLexer *lexer, bool allow_keyword) {
@@ -684,101 +887,419 @@ index 2761703..f92a203 100644
 +        candidates &= ~(UINT64_C(1) << i);
 +    ++position;
 +    lexer->advance(lexer, false);
-+  } while (is_alpha_num(lexer->lookahead) || lexer->lookahead == '_' ||
-+           lexer->lookahead == '?' || lexer->lookahead == '!');
++  } while (is_alpha_num(lexer->lookahead) || lexer->lookahead == '_');
++  // One `?` or `!` may end the name; it never matches a keyword.
++  if (lexer->lookahead == '?' || lexer->lookahead == '!') {
++    lexer->advance(lexer, false);
++    return true;
++  }
 +  for (unsigned i = 0; !allow_keyword && i < count; ++i)
 +    if ((candidates & (UINT64_C(1) << i)) && strlen(KEYWORDS[i]) == position)
 +      return false;
 +  return true;
 +}
 +
-+static void skip_whitespace(TSLexer *lexer) {
-+  while (lexer->lookahead == ' ' || lexer->lookahead == '\t' ||
-+         lexer->lookahead == '\n' || lexer->lookahead == '\r' ||
-+         lexer->lookahead == '\f' || lexer->lookahead == '\v')
-+    lexer->advance(lexer, false);
++static bool is_whitespace(int32_t c) {
++  return c == ' ' || c == '\t' || c == '\n' || c == '\r' ||
++         c == '\f' || c == '\v';
++}
++
++static void skip_whitespace(TSLexer *lexer, bool skip) {
++  while (is_whitespace(lexer->lookahead)) lexer->advance(lexer, skip);
 +}
 +
 +static bool skip_path_extras(TSLexer *lexer) {
 +  for (;;) {
-+    skip_whitespace(lexer);
++    skip_whitespace(lexer, false);
 +    if (lexer->lookahead != '#') return true;
 +    lexer->advance(lexer, false);
 +    if (lexer->lookahead == '*') return false; // Doc attributes are not ignored by Parser.peek.
 +    if (lexer->lookahead == '#' || lexer->lookahead == '!') {
 +      char delimiter = lexer->lookahead;
-+      lexer->advance(lexer, false);
+       lexer->advance(lexer, false);
 +      bool ended = false;
-+      while (!lexer->eof(lexer)) {
+       while (!lexer->eof(lexer)) {
+-        if (is_num(lexer->lookahead)) {
 +        if (lexer->lookahead == delimiter) {
-+          lexer->advance(lexer, false);
+           lexer->advance(lexer, false);
 +          if (lexer->lookahead == '#') {
 +            lexer->advance(lexer, false);
 +            ended = true;
 +            break;
 +          }
-+        } else {
+         } else {
+-          return true;
 +          lexer->advance(lexer, false);
-+        }
-+      }
+         }
+       }
+-      return true;
 +      if (!ended) return false;
-+    } else {
+     } else {
+-      // Invalid number `-`
+-      return false;
 +      while (!lexer->eof(lexer) && lexer->lookahead != '\n' && lexer->lookahead != '\r')
 +        lexer->advance(lexer, false);
-+    }
-+  }
-+}
-+
+     }
+-  } else {
+-    return false;
+   }
+ }
+ 
+-static bool match_range_dots(TSLexer *lexer) {
+-  if (lexer->lookahead == '.') {
+-    lexer->advance(lexer, false);
+-    if (lexer->lookahead == '.') {
 +static bool generic_arguments_ahead(TSLexer *lexer) {
 +  if (lexer->lookahead != '<') return false;
 +  lexer->advance(lexer, false);
 +  unsigned budget = 32;
++  // Comments are trivia to the compiler's lookahead, so they don't stop it.
 +  while (budget > 0) {
-+    skip_whitespace(lexer);
++    if (!skip_path_extras(lexer)) return false;
 +    --budget;
 +    if (lexer->lookahead == '>') {
-+      lexer->advance(lexer, false);
+       lexer->advance(lexer, false);
+-      return true;
+-    } else {
 +      return lexer->lookahead == '(';
 +    }
 +    if (!match_identifier(lexer, false)) return false;
-+    skip_whitespace(lexer);
++    if (!skip_path_extras(lexer)) return false;
 +    if (lexer->lookahead == ',') {
 +      if (budget == 0) return false;
 +      --budget;
 +      lexer->advance(lexer, false);
 +    } else if (lexer->lookahead != '>') {
-+      return false;
+       return false;
+     }
+-  } else {
+-    return false;
+   }
++  return false;
++}
++
++static bool is_hex(int32_t c) {
++  return is_num(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
++}
++
++static int32_t digit_value(int32_t c) {
++  if (is_num(c)) return c - '0';
++  if (is_alpha_lower(c)) return c - 'a' + 10;
++  return c - 'A' + 10;
++}
++
++// The compiler's number checks, applied one character at a time.
++typedef struct {
++  unsigned length;
++  unsigned dots;
++  int32_t previous;
++  bool malformed;
++  bool invalid;
++  // std.zig.parseNumberLiteral state.
++  unsigned base;
++  bool underscore;
++  int32_t special;
++  bool exponent;
++  bool period;
++  bool leading_zero;
++} NumberCheck;
++
++static void check_number_char(NumberCheck *check, int32_t c) {
++  unsigned i = check->length++;
++  // Lexer.isMalformedNumber
++  if (c == '.') ++check->dots;
++  if ((c == '_' && (check->previous == '_' || check->previous == '.')) ||
++      (c == '.' && check->previous == '_') || check->dots > 1)
++    check->malformed = true;
++  check->previous = c;
++
++  // std.zig.parseNumberLiteral
++  if (check->invalid) return;
++  if (i == 0) {
++    check->leading_zero = c == '0';
++    return;
++  }
++  if (i == 1 && check->base != 10) return; // lowercase base prefix
++  if (i == 1 && check->leading_zero && c != '.' && c != 'e' && c != 'E') {
++    check->invalid = true; // leading zero or uppercase base prefix
++    return;
++  }
++  if (c == '_') {
++    if ((i == 2 && check->base != 10) || check->special || check->underscore) check->invalid = true;
++    check->underscore = true;
++    return;
++  }
++  if ((check->base == 10 && (c == 'e' || c == 'E')) || (check->base == 16 && (c == 'p' || c == 'P'))) {
++    if ((check->base == 16 && i == 2) || check->exponent || check->underscore) check->invalid = true;
++    check->special = c;
++    check->exponent = true;
++    return;
++  }
++  if (c == '.') {
++    if (check->exponent || (check->base != 10 && check->base != 16) || check->period || check->underscore)
++      check->invalid = true;
++    check->period = true;
++    check->special = c;
++    return;
++  }
++  if (c == '+' || c == '-') {
++    check->special = c; // the lexer only takes a sign after an exponent marker
++    return;
++  }
++  int32_t digit = digit_value(c);
++  if ((unsigned)digit >= check->base || (check->exponent && digit >= 10)) check->invalid = true;
++  check->underscore = false;
++  check->special = 0;
++}
++
++// Lexer.lexNumber: a digit starts a greedy scan. After a touching `.`, as in
++// `t.0.1`, the compiler takes no fraction or exponent and reads the field
++// index with std.fmt.parseFloat, which accepts leading zeros and only the
++// hexadecimal prefix. Malformed spellings are not shortened to a valid
++// prefix; returning false leaves no token, so the parser reports an error.
++static bool scan_number(TSLexer *lexer, bool after_dot) {
++  NumberCheck check = {0};
++  check.base = 10;
++  bool zero = lexer->lookahead == '0';
++  check_number_char(&check, lexer->lookahead);
++  lexer->advance(lexer, false);
++  unsigned base = 10;
++  bool prefix_upper = false;
++  if (zero) {
++    int32_t c = lexer->lookahead;
++    if (c == 'x' || c == 'X') base = 16;
++    else if (c == 'b' || c == 'B') base = 2;
++    else if (c == 'o' || c == 'O') base = 8;
++    if (base != 10) {
++      prefix_upper = is_alpha_upper(c);
++      check.base = prefix_upper ? 10 : base; // an uppercase prefix fails the literal check
++      check_number_char(&check, c);
++      lexer->advance(lexer, false);
++    }
++  }
++  lexer->mark_end(lexer);
++  for (;;) {
++    int32_t c = lexer->lookahead;
++    if (is_num(c) || c == '_' || (base == 16 && is_hex(c))) {
++      check_number_char(&check, c);
++      lexer->advance(lexer, false);
++      lexer->mark_end(lexer);
++    } else if (!after_dot && c == '.') {
++      lexer->advance(lexer, false);
++      if (!(is_num(lexer->lookahead) || (base == 16 && is_hex(lexer->lookahead)))) break;
++      check_number_char(&check, c);
++    } else if (!after_dot && ((base == 10 && (c == 'e' || c == 'E')) ||
++                              (base == 16 && (c == 'p' || c == 'P')))) {
++      lexer->advance(lexer, false);
++      int32_t sign = 0;
++      if (lexer->lookahead == '+' || lexer->lookahead == '-') {
++        sign = lexer->lookahead;
++        lexer->advance(lexer, false);
++      }
++      if (!is_num(lexer->lookahead)) break;
++      check_number_char(&check, c);
++      if (sign) check_number_char(&check, sign);
++    } else {
++      break;
++    }
++  }
++  if (check.malformed || check.previous == '_') return false;
++  if (after_dot) {
++    // std.fmt.parseFloat: decimal digits, or `0x`/`0X` and a hex digit.
++    if (base == 16) return check.length > 2 && check.dots == 0 && !(check.length == 3 && check.previous == '_');
++    return base == 10;
++  }
++  if (check.length == 2 && base != 10) return false;
++  return !check.invalid && !check.underscore && !check.special;
++}
++
++static bool scan_raw_string(TSLexer *lexer) {
++  lexer->advance(lexer, false);
++  while (!lexer->eof(lexer)) {
++    int32_t c = lexer->lookahead;
++    lexer->advance(lexer, false);
++    if (c == '\'') return true;
++  }
++  return false;
++}
++
++static bool skip_block_comment(TSLexer *lexer) {
++  while (!lexer->eof(lexer)) {
++    int32_t c = lexer->lookahead;
++    lexer->advance(lexer, false);
++    if (c == '#' && lexer->lookahead == '#') {
++      lexer->advance(lexer, false);
++      return true;
 +    }
 +  }
 +  return false;
 +}
 +
- // Match a number (positive or negative) or return false if no number is matched
- static bool match_number(TSLexer *lexer) {
-   if (lexer->lookahead == '-' || is_num(lexer->lookahead)) {
-@@ -65,6 +154,11 @@ enum TokenType {
++enum StringMode { LINE_STRING, BLOCK_STRING, INTERPOLATION };
++
++typedef struct {
++  uint8_t mode;
++  uint32_t braces; // unmatched `{` inside an interpolation
++} StringFrame;
++
++// The parser stops at 256 nested expressions; each string level inside an
++// interpolation takes two frames.
++enum { MAX_STRING_FRAMES = 512 };
++
++// Consume `"` or `"""`. Returns false for `""`, which is already complete.
++static bool open_string(TSLexer *lexer, StringFrame *frame) {
++  *frame = (StringFrame){LINE_STRING, 0};
++  lexer->advance(lexer, false);
++  if (lexer->lookahead != '"') return true;
++  lexer->advance(lexer, false);
++  if (lexer->lookahead != '"') return false;
++  lexer->advance(lexer, false);
++  frame->mode = BLOCK_STRING;
++  return true;
++}
++
++// `'...'` is raw. `"..."` and `"""..."""` take escapes and `#{...}`
++// interpolations, which are code: nested strings, braces and comments stay
++// inside the one opaque token until the brace that closes `#{`.
++static bool scan_string(TSLexer *lexer) {
++  if (lexer->lookahead == '\'') return scan_raw_string(lexer);
++  StringFrame frames[MAX_STRING_FRAMES];
++  unsigned depth = open_string(lexer, &frames[0]) ? 1 : 0;
++  while (depth > 0) {
++    if (lexer->eof(lexer)) return false;
++    StringFrame *top = &frames[depth - 1];
++    int32_t c = lexer->lookahead;
++    if (top->mode == INTERPOLATION) {
++      if (c == '"') {
++        if (depth == MAX_STRING_FRAMES) return false;
++        if (open_string(lexer, &frames[depth])) ++depth;
++        continue;
++      }
++      if (c == '\'') {
++        if (!scan_raw_string(lexer)) return false;
++        continue;
++      }
++      // Code has no escapes or quasiquotes.
++      if (c == '\\' || c == '`') return false;
++      lexer->advance(lexer, false);
++      if (c == '{') {
++        ++top->braces;
++      } else if (c == '}') {
++        if (top->braces == 0) --depth;
++        else --top->braces;
++      } else if (c == '#') {
++        // Doc comments are not expressions; module docs must start the file.
++        if (lexer->lookahead == '*' || lexer->lookahead == '!') return false;
++        if (lexer->lookahead == '#') {
++          lexer->advance(lexer, false);
++          if (!skip_block_comment(lexer)) return false;
++        } else {
++          while (!lexer->eof(lexer) && lexer->lookahead != '\n') lexer->advance(lexer, false);
++        }
++      }
++      continue;
++    }
++    lexer->advance(lexer, false);
++    if (c == '\\') {
++      if (!lexer->eof(lexer)) lexer->advance(lexer, false);
++    } else if (c == '#' && lexer->lookahead == '{') {
++      if (depth == MAX_STRING_FRAMES) return false;
++      lexer->advance(lexer, false);
++      frames[depth++] = (StringFrame){INTERPOLATION, 0};
++    } else if (c == '"') {
++      if (top->mode == LINE_STRING) {
++        --depth;
++      } else if (lexer->lookahead == '"') {
++        lexer->advance(lexer, false);
++        if (lexer->lookahead == '"') {
++          lexer->advance(lexer, false);
++          --depth;
++        }
++      }
++    }
++  }
++  return true;
+ }
+ 
+ enum TokenType {
+   DOCUMENTATION,
    ATOM,
    STRING,
-   RANGE,
+-  RANGE,
 +  GENERIC_RECEIVER,
-+  OPEN_RANGE_DOTS,
-+  CLOSED_RANGE_DOTS,
++  OPEN_RANGE_END,
 +  GENERIC_PATH_HEAD,
 +  GENERIC_PATH_RECEIVER,
++  BARE_ARG,
++  BARE_ARG_REJECTED,
++  PAREN_GENERIC,
++  ERROR_SENTINEL,
  };
  
++
++
  void *tree_sitter_revo_external_scanner_create() {
-@@ -88,11 +182,59 @@ bool tree_sitter_revo_external_scanner_scan(void *payload, TSLexer *lexer,
+   // Nothing needed here yet
+   return NULL;
+@@ -86,13 +394,88 @@ void tree_sitter_revo_external_scanner_deserialize(void *payload,
+ bool tree_sitter_revo_external_scanner_scan(void *payload, TSLexer *lexer,
+                                             const bool *valid_symbols) {
  
-   // Skip whitespace
-   while (lexer->lookahead == ' ' || lexer->lookahead == '\t' ||
+-  // Skip whitespace
+-  while (lexer->lookahead == ' ' || lexer->lookahead == '\t' ||
 -         lexer->lookahead == '\n' || lexer->lookahead == '\r') {
-+         lexer->lookahead == '\n' || lexer->lookahead == '\r' ||
-+         lexer->lookahead == '\f' || lexer->lookahead == '\v') {
-     lexer->advance(lexer, true);
+-    lexer->advance(lexer, true);
++  // A gap after loop dots begins the body. Check before skipping extras;
++  // the grammar's immediate infix dots enforce adjacency to start and step.
++  // This zero-width token leaves all expression text for the normal parser.
++  if (valid_symbols[OPEN_RANGE_END] &&
++      (lexer->eof(lexer) || is_whitespace(lexer->lookahead) || lexer->lookahead == '#')) {
++    lexer->mark_end(lexer);
++    lexer->result_symbol = OPEN_RANGE_END;
++    return true;
    }
  
 -  char next = lexer->lookahead;
++  bool error_recovery = valid_symbols[ERROR_SENTINEL];
++
++  // A parenthesized receiver takes type arguments only when `<` touches `)`.
++  if (valid_symbols[PAREN_GENERIC] && !error_recovery && lexer->lookahead == '<') {
++    lexer->mark_end(lexer);
++    if (!generic_arguments_ahead(lexer)) return false;
++    lexer->result_symbol = PAREN_GENERIC;
++    return true;
++  }
++
++  // A string or table on the same line after a callable name is its single
++  // bare call argument. After a call or bare call it is rejected, as upstream
++  // reports for `f "x" "y"` and `f() "x"`. A newline ends the expression.
++  if ((valid_symbols[BARE_ARG] || valid_symbols[BARE_ARG_REJECTED]) && !error_recovery) {
++    while (lexer->lookahead == ' ' || lexer->lookahead == '\t') lexer->advance(lexer, true);
++    int32_t c = lexer->lookahead;
++    if (c == '"' || c == '\'' || c == '{') {
++      if (valid_symbols[BARE_ARG_REJECTED]) {
++        // The sentinel is valid nowhere, so the literal becomes an error.
++        lexer->advance(lexer, false);
++        lexer->mark_end(lexer);
++        lexer->result_symbol = ERROR_SENTINEL;
++        return true;
++      }
++      lexer->mark_end(lexer);
++      lexer->result_symbol = BARE_ARG;
++      return true;
++    }
++  }
++
++  skip_whitespace(lexer, true);
++
++  // A malformed number is one invalid token upstream. Emitting the sentinel,
++  // which no rule accepts, reports it instead of splitting `1__2` in two.
++  if (valid_symbols[STRING] && !error_recovery && is_num(lexer->lookahead)) {
++    if (scan_number(lexer, false)) return false;
++    lexer->result_symbol = ERROR_SENTINEL;
++    return true;
++  }
++
 +  // Only a bare/dotted path can introduce a generic call. For dotted paths,
 +  // emit the first name only after validating the whole path; grammar rules
 +  // keep its final receiver under the function_call name field.
@@ -810,39 +1331,18 @@ index 2761703..f92a203 100644
 +    return false;
 +  }
 +
-+  // In a for-range, whitespace after `..` starts the loop body.
-+  // Consume only the dots and inspect adjacency; expression parsing stays in the grammar.
-+  if ((valid_symbols[OPEN_RANGE_DOTS] || valid_symbols[CLOSED_RANGE_DOTS]) &&
-+      lexer->lookahead == '.') {
-+    if (!match_range_dots(lexer)) return false;
-+    lexer->mark_end(lexer);
-+    bool open = lexer->eof(lexer) || lexer->lookahead == ' ' ||
-+                lexer->lookahead == '\t' || lexer->lookahead == '\n' ||
-+                lexer->lookahead == '\r' || lexer->lookahead == '\f' ||
-+                lexer->lookahead == '\v';
-+    unsigned symbol = open ? OPEN_RANGE_DOTS : CLOSED_RANGE_DOTS;
-+    if (!valid_symbols[symbol]) return false;
-+    lexer->result_symbol = symbol;
-+    return true;
-+  }
-+
 +  int32_t next = lexer->lookahead;
    // Documentation
    if (next == '#' && valid_symbols[DOCUMENTATION]) {
      lexer->advance(lexer, false);
-@@ -120,36 +262,17 @@ bool tree_sitter_revo_external_scanner_scan(void *payload, TSLexer *lexer,
+@@ -120,153 +503,35 @@ bool tree_sitter_revo_external_scanner_scan(void *payload, TSLexer *lexer,
    }
    // Atoms
    else if (next == ':' && valid_symbols[ATOM]) {
 -    // Loop over all valid chars, and invalidate
 -    // if a method call follows like `()`
 -    while (!lexer->eof(lexer)) {
-+    lexer->advance(lexer, false);
-+    // Digits are continuation characters; the compiler requires a name or
-+    // symbol at the start of an atom.
-+    if (!is_valid_atom(lexer->lookahead) || is_num(lexer->lookahead)) return false;
-+    do {
-       lexer->advance(lexer, false);
+-      lexer->advance(lexer, false);
 -      char next = lexer->lookahead;
 -      bool valid = is_valid_atom(next);
 -      while (!lexer->eof(lexer)) {
@@ -869,53 +1369,156 @@ index 2761703..f92a203 100644
 -        }
 -      }
 -    }
-+    } while (is_valid_atom(lexer->lookahead));
+-  } else if ((next == '\"' || next == '\'') && valid_symbols[STRING]) {
+-    // Strings
+-    char delimiter = next;
+-
+-    // Advance the lexer
+     lexer->advance(lexer, false);
+-
+-    // First actual char of string (not first ")
+-    char first_char = lexer->lookahead;
+-    bool escaped = false;
+-    bool closing = false;
+-    if (first_char == delimiter) {
+-      // So far -> ""
+-      // Check for empty string or escaped string
+-      lexer->advance(lexer, false);
+-      if (lexer->lookahead == delimiter) {
+-        // """
+-        // Escaped string
+-        escaped = true;
+-      } else {
+-        // Empty string
+-        lexer->result_symbol = STRING;
+-        return true;
+-      }
+-    }
+-    while (!lexer->eof(lexer)) {
+-      // Skip escaped characters
+-      if (!closing) {
+-        if (lexer->lookahead == '\\') {
+-          lexer->advance(lexer, false);
+-        } else if (lexer->lookahead == delimiter) {
+-          if (escaped) {
+-            closing = true;
+-          } else {
+-            lexer->advance(lexer, false);
+-            lexer->result_symbol = STRING;
+-            return true;
+-          }
+-        }
+-      } else {
+-        // Check for all closing
+-        if (lexer->lookahead == delimiter) {
+-          lexer->advance(lexer, false);
+-          if (lexer->lookahead == delimiter) {
+-            lexer->advance(lexer, false);
+-            lexer->result_symbol = STRING;
+-            return true;
+-          } else {
+-            closing = false;
+-          }
+-        } else {
+-          closing = false;
+-        }
+-      }
+-      lexer->advance(lexer, false);
+-    }
+-  }
+-  // Ranges
+-  else if ((next == '-' || next == '.' || is_num(next)) &&
+-           valid_symbols[RANGE]) {
+-    if (match_number(lexer)) {
+-      // Begins with a number
+-      // `1`
+-      if (match_range_dots(lexer)) {
+-        if (match_number(lexer)) {
+-          // `1..2`
+-          if (!(lexer->lookahead == '.')) {
+-            // Can't be another match
+-            // `1..2`
+-            lexer->result_symbol = RANGE;
+-            return true;
+-          } else if (match_range_dots(lexer)) {
+-            // `1..2..`
+-            match_number(lexer);
+-            lexer->result_symbol = RANGE;
+-            return true;
+-          } else {
+-            return false;
+-          }
+-        } else {
+-          // `1..`
+-          lexer->result_symbol = RANGE;
+-          return true;
+-        }
+-      } else {
+-        return false;
+-      }
+-    } else if (match_range_dots(lexer)) {
+-      // Begins with `..`
+-      // Expect numbers
+-      if (match_number(lexer)) {
+-        // `..1`
+-        // This could be valid so far.
+-        if (!(lexer->lookahead == '.')) {
+-          // Can't be another match
+-          // `..1`
+-          lexer->result_symbol = RANGE;
+-          return true;
+-        } else if (match_range_dots(lexer)) {
+-          // `..1..`
+-          if (match_number(lexer)) {
+-            // `..1..2`
+-            lexer->result_symbol = RANGE;
+-            return true;
+-          } else {
+-            return false;
+-          }
+-        } else {
+-          return false;
+-        }
+-      } else {
+-        // `..A`
+-        return false;
++    if (is_alpha(lexer->lookahead) || lexer->lookahead == '_') {
++      // Name atoms stop at operators. Like names, they may end with one `?`
++      // or `!`, but `:a!=b` compares `:a`.
++      do {
++        lexer->advance(lexer, false);
++      } while (is_alpha_num(lexer->lookahead) || lexer->lookahead == '_');
++      lexer->mark_end(lexer);
++      if (lexer->lookahead == '?' || lexer->lookahead == '!') {
++        bool bang = lexer->lookahead == '!';
++        lexer->advance(lexer, false);
++        if (!bang || lexer->lookahead != '=') lexer->mark_end(lexer);
+       }
++    } else if (is_symbol_atom(lexer->lookahead)) {
++      do {
++        lexer->advance(lexer, false);
++      } while (is_symbol_atom(lexer->lookahead));
++      lexer->mark_end(lexer);
+     } else {
+       return false;
+     }
 +    // A touching argument list makes this a method call instead.
 +    if (lexer->lookahead == '(') return false;
 +    lexer->result_symbol = ATOM;
 +    return true;
-   } else if ((next == '\"' || next == '\'') && valid_symbols[STRING]) {
-     // Strings
-     char delimiter = next;
-@@ -158,7 +281,7 @@ bool tree_sitter_revo_external_scanner_scan(void *payload, TSLexer *lexer,
-     lexer->advance(lexer, false);
- 
-     // First actual char of string (not first ")
--    char first_char = lexer->lookahead;
-+    int32_t first_char = lexer->lookahead;
-     bool escaped = false;
-     bool closing = false;
-     if (first_char == delimiter) {
-@@ -223,14 +346,21 @@ bool tree_sitter_revo_external_scanner_scan(void *payload, TSLexer *lexer,
-             return true;
-           } else if (match_range_dots(lexer)) {
-             // `1..2..`
--            match_number(lexer);
-+            if (!match_number(lexer) && !(lexer->eof(lexer) ||
-+                lexer->lookahead == ' ' || lexer->lookahead == '\t' ||
-+                lexer->lookahead == '\n' || lexer->lookahead == '\r' ||
-+         lexer->lookahead == '\f' || lexer->lookahead == '\v')) return false;
-             lexer->result_symbol = RANGE;
-             return true;
-           } else {
-             return false;
-           }
-         } else {
--          // `1..`
-+          // `1..`; adjacent computed endpoints belong to the grammar.
-+          if (!(lexer->eof(lexer) || lexer->lookahead == ' ' ||
-+                lexer->lookahead == '\t' || lexer->lookahead == '\n' ||
-+                lexer->lookahead == '\r' || lexer->lookahead == '\f' ||
-+                lexer->lookahead == '\v' || lexer->lookahead == ']')) return false;
-           lexer->result_symbol = RANGE;
-           return true;
-         }
++  } else if ((next == '"' || next == '\'') && valid_symbols[STRING]) {
++    if (!scan_string(lexer)) return false;
++    lexer->result_symbol = STRING;
++    return true;
+   }
+   // Nothing found for this to parse, return false
+   return false;
 diff --git a/test/ast/check_expressions.py b/test/ast/check_expressions.py
 new file mode 100644
-index 0000000..13f81ad
+index 0000000..500fc57
 --- /dev/null
 +++ b/test/ast/check_expressions.py
-@@ -0,0 +1,92 @@
+@@ -0,0 +1,93 @@
 +"""Check current expression trees and complete iterator/declaration spans.
 +
 +Usage: python3 check_expressions.py GRAMMAR
@@ -923,7 +1526,6 @@ index 0000000..13f81ad
 +from pathlib import Path
 +import argparse
 +import tempfile
-+import xml.etree.ElementTree as ET
 +
 +from revo_parser import Parser
 +
@@ -931,7 +1533,7 @@ index 0000000..13f81ad
 +    'spawn parenthesized function': 'let x = spawn (fn() "async result")()',
 +    'whitespace separates condition from parenthesized consequence': 'let x = (if self.cur == cur ("> ") else "  ")',
 +    'repeated paren calls': 'let x = make()()',
-+    'qualified macro call': 'let x = proc_lib.add_one!(m.pi) |> m.double()',
++    'qualified bang-name call': 'let x = proc_lib.add_one!(m.pi) |> m.double()',
 +    'iterator call': 'for x in iter.range(5) do print(x) end',
 +    'table iterator': 'for x in {1, 2} do print(x) end',
 +    'string iterator': 'for c in "hi" do print(c) end',
@@ -951,8 +1553,8 @@ index 0000000..13f81ad
 +    'bare labeled break value': 'do/a break/a "value" end',
 +    'break before match arm': 'match c | :a => break/chars(:nil) | _ => c',
 +    'predicate call in binary condition': 'while (i + count < s:len() and numeric?(s[i + count])) do 0 end',
-+    'empty macro call': 'fmt!()',
-+    'trailing macro comma': 'fmt!(42,)',
++    'empty bang-name call': 'fmt!()',
++    'trailing call comma': 'fmt!(42,)',
 +}
 +def verify(grammar, library=None):
 +    with Parser(grammar, library) as parser, tempfile.TemporaryDirectory(prefix="revo-expression-") as directory:
@@ -960,12 +1562,11 @@ index 0000000..13f81ad
 +        failures = []
 +        for label, source in CASES.items():
 +            fixture.write_text(source + '\n')
-+            result = parser.parse(fixture, xml=True)
-+            if '</sources>' not in result.stdout:
-+                raise RuntimeError(result.stderr or result.stdout or 'Parser returned no syntax tree')
-+            tree = ET.fromstring(result.stdout.split('</sources>', 1)[0] + '</sources>')
-+            if result.returncode or list(tree.iter('ERROR')):
++            try:
++                tree = parser.parse_tree(fixture)
++            except AssertionError:
 +                failures.append(label)
++                continue
 +            source_tree = list(tree)[0][0]
 +            if len(source_tree) != 1:
 +                failures.append(label + ': split expression')
@@ -990,10 +1591,13 @@ index 0000000..13f81ad
 +                    failures.append(label + ': consequence swallowed as call')
 +            if label == 'spawn parenthesized function' and not list(tree.iter('spawn')):
 +                failures.append(label + ': missing spawn node')
-+            if label == 'qualified macro call':
-+                macro = next(tree.iter('macro_call'), None)
-+                if macro is None or not any(node.get('field') == 'name' and node.text == 'add_one!' for node in macro):
-+                    failures.append(label + ': missing qualified macro name')
++            if label == 'qualified bang-name call':
++                # Macros are gone; a trailing `!` is part of an ordinary call name.
++                call = next(tree.iter('scoped')).find('function_call')
++                name = None if call is None else call.find('ident')
++                if (name is None or name.get('field') != 'name' or name.text != 'add_one'
++                        or not (name.tail or '').strip().startswith('!')):
++                    failures.append(label + ': missing qualified call name')
 +            if declaration is not None:
 +                # The complete expression must belong to the declaration value.
 +                if int(declaration.get('ecol')) != len(source):
@@ -1010,10 +1614,10 @@ index 0000000..13f81ad
 +    verify(options.grammar, options.lib_path)
 diff --git a/test/ast/check_generic_calls.py b/test/ast/check_generic_calls.py
 new file mode 100644
-index 0000000..2406ee4
+index 0000000..a07f9eb
 --- /dev/null
 +++ b/test/ast/check_generic_calls.py
-@@ -0,0 +1,129 @@
+@@ -0,0 +1,130 @@
 +"""AST checks for current Revo generic calls and lexical additions.
 +
 +Run after tree-sitter generate: python3 test/ast/check_generic_calls.py GRAMMAR [QUERY...]
@@ -1035,12 +1639,7 @@ index 0000000..2406ee4
 +
 +        def parse(source, require_valid=True):
 +            fixture.write_text(source + "\n")
-+            result = parser.parse(fixture, xml=True)
-+            if require_valid:
-+                assert result.returncode == 0, result.stdout or result.stderr
-+            if "</sources>" not in result.stdout:
-+                raise AssertionError(result.stderr or result.stdout)
-+            return ET.fromstring(result.stdout.split("</sources>", 1)[0] + "</sources>")
++            return parser.parse_tree(fixture, expect_errors=False if require_valid else None)
 +
 +        def generic_calls(tree):
 +            # Type arguments are direct, unnamed ident children of the call.
@@ -1059,13 +1658,15 @@ index 0000000..2406ee4
 +            "bang receiver syntax": "identity!<num>(2)",
 +            "nullable argument name": "identity<T?>(2)",
 +            "bang argument name": "identity<T!>(2)",
-+            "bang inside argument name": "identity<T!x>(2)",
 +            "dotted": "module.identity<num,T>(2)",
 +            "nested path": "module.inner.identity<num>(2)",
++            "keyword path member": "module.use<num>(2)",
 +            "empty": "let empty = identity<>(2)",
 +            "trailing comma": "let trailing = identity<num,>(2)",
 +            "internal whitespace": "identity< \n num , T \t >(2)",
 +            "ASCII vertical whitespace": "identity<\fnum,\vT>(2)",
++            "internal block comment": "identity<num, ##comment## T>(2)",
++            "internal line comment": "identity<num, #comment\n T>(2)",
 +            "32 tokens": "identity<" + ",".join(["T"] * 16) + ">(2)",
 +            "31 tokens with trailing comma": "identity<" + ",".join(["T"] * 15) + ",>(2)",
 +        }
@@ -1078,11 +1679,15 @@ index 0000000..2406ee4
 +            "newline before arguments": "identity<num>\n(2)",
 +            "numeric argument": "identity<1>(2)",
 +            "keyword argument": "identity<fn>(2)",
++            "import argument": "identity<import>(2)",
++            "use argument": "identity<use>(2)",
++            "use receiver": "use<T>(2)",
++            "bang inside argument name": "identity<T!x>(2)",
++            "doubled receiver suffix": "identity?!<num>(2)",
 +            "non ASCII receiver": "Ł<T>(2)",
 +            "non ASCII argument": "identity<Ł>(2)",
 +            "numeric dotted receiver": "identity.0.identity<num>(2)",
-+            "internal block comment": "identity<num, ##comment## T>(2)",
-+            "internal line comment": "identity<num, #comment\n T>(2)",
++            "internal doc comment": "identity<num, #*doc*# T>(2)",
 +            "comment before bracket": "identity##comment##<num>(2)",
 +            "comment before arguments": "identity<num>##comment##(2)",
 +            "33 tokens with trailing comma": "identity<" + ",".join(["T"] * 16) + ",>(2)",
@@ -1094,7 +1699,6 @@ index 0000000..2406ee4
 +        }
 +        for label, source in positive.items():
 +            tree = parse(source)
-+            assert not list(tree.iter("ERROR")), (label, ET.tostring(tree).decode())
 +            calls = generic_calls(tree)
 +            assert len(calls) == 1, (label, ET.tostring(tree).decode())
 +            names = [child.text for child in calls[0] if child.get("field") == "name"]
@@ -1110,11 +1714,12 @@ index 0000000..2406ee4
 +        assert [n.text for n in condition.iter("operator")] == ["<"]
 +
 +        tree = parse("1..2")
-+        assert [node.text for node in tree.iter("range")] == ["1..2"]
++        ranges = list(tree.iter("range"))
++        assert len(ranges) == 1 and [node.text for node in ranges[0]] == ["1", "2"]
++        assert ranges[0].get("scol") == "0" and ranges[0].get("ecol") == "4"
 +
 +        lexical = "let hex = 0x101042FF; let binary = 0b1010; let octal = 0o17; let float = 0x1.8p+1; let short_float = 0x1.p1; let decimal_float = 1.e2; do let x = 2; x *= 3; let s = 'a'; s ~= 'b'; end"
 +        tree = parse(lexical)
-+        assert not list(tree.iter("ERROR")), ET.tostring(tree).decode()
 +        numbers = {node.text for node in tree.iter("number")}
 +        assert {"0x101042FF", "0b1010", "0o17", "0x1.8p+1", "0x1.p1", "1.e2"} <= numbers, numbers
 +        operators = {node.text for node in tree.iter("operator")}
@@ -1143,12 +1748,256 @@ index 0000000..2406ee4
 +    arguments.add_argument("--lib-path", type=Path)
 +    options = arguments.parse_args()
 +    verify(options.grammar, options.queries, options.lib_path)
+diff --git a/test/ast/check_upstream.py b/test/ast/check_upstream.py
+new file mode 100644
+index 0000000..3c10571
+--- /dev/null
++++ b/test/ast/check_upstream.py
+@@ -0,0 +1,238 @@
++"""Check complete programs at the current upstream syntax boundaries.
++
++Strings stay opaque editor tokens, including compiler-invalid interpolation
++modes. Interpolations are code, so their nested strings stay inside the token.
++"""
++
++from pathlib import Path
++import argparse
++import tempfile
++
++from revo_parser import Parser
++
++
++VALID = {
++    'numeric range': 'for i in 0..3 do i end',
++    'computed range': 'for i in start..limit do i end',
++    'stepped range': 'for i in start..step..limit do i end',
++    'leading range': 'for i in ..3 do i end',
++    'leading computed range': 'for i in ..limit do i end',
++    'fully open range': 'for i in .. do i end',
++    'open numeric range': 'for i in 0.. do i end',
++    'open computed range': 'for i in start.. do i end',
++    'space after dots starts body': 'for i in 0.. 3',
++    'open stepped range': 'for i in 0..2.. do i end',
++    'negative step': 'for i in 10..-2.. do i end',
++    'grouped computed bounds': 'for i in (start + 1)..(limit - 1) do i end',
++    'underscored range step': 'for i in 0..1_0..3 do break i end',
++    'exponent range step': 'for i in 0..0e0..3 do break i end',
++    'hexadecimal range step': 'for i in 0..0x0..3 do break i end',
++    'underscored range end': 'for i in 0..3_0 do break i end',
++    'exponent range end': 'for i in 0..3e0 do break i end',
++    'hexadecimal range end': 'for i in 0..0x3 do break i end',
++    'arithmetic range end': 'for i in 0..2 + 3 do break i end',
++    'subtracted range end': 'for i in 0..5 - 1 do break i end',
++    'multiplied range end': 'for i in 0..2 * 3 do break i end',
++    'bitwise range end': 'for i in 0..2 bor 3 do break i end',
++    'arithmetic range step': 'for i in 0..1 + 1..5 do break i end',
++    'arithmetic stepped range end': 'for i in 0..1..2 + 3 do break i end',
++    'fractional stepped range end': 'for i in 0..1..2.5 do break i end',
++    'arithmetic range start': 'for i in 1 + 1..4 do break i end',
++    'unary range end': 'for i in 0..-1 + 2 do break i end',
++    'mixed unary range end': 'for i in 0..2 * -1 + 4 do break i end',
++    'unary call range end': 'fn bound() 2; for i in 0..-bound() + 4 do break i end',
++    'slice without bounds': 'let xs = {1, 2, 3}; xs[..]',
++    'slice without start': 'let xs = {1, 2, 3}; xs[..1]',
++    'slice without end': 'let xs = {1, 2, 3}; xs[1..]',
++    'slice reverse': 'let xs = {1, 2, 3}; xs[..-1..]',
++    'slice computed bounds': 'let xs = {1, 2, 3}; xs[start..step..limit]',
++    'slice whitespace': 'let xs = {1, 2, 3}; xs[ start .. step .. limit ]',
++    'underscored slice step': 'let xs = {1, 2, 3}; xs[0..1_0..3]',
++    'arithmetic slice end': 'let xs = {1, 2, 3}; xs[0..1 + 1]',
++    'unary slice end': 'let xs = {1, 2, 3}; xs[0..-1 + 2]',
++    'mixed unary slice end': 'let xs = {1, 2, 3}; xs[0..2 * -1 + 4]',
++    'unary call slice end': 'fn bound() 2; let xs = {1, 2, 3}; xs[0..-bound() + 4]',
++    'plain interpolation': 'let t = 42; let text = "#{t}"; text',
++    'display interpolation': 'let t = 42; let text = "#{t:v}"; text',
++    'debug interpolation': 'let t = 42; let text = "#{t:?}"; text',
++    'pretty interpolation': 'let t = 42; let text = "#{t:p}"; text',
++    'atom interpolation': 'let text = "#{:d}"; text',
++    'mode trailing whitespace': 'let t = 42; let text = "#{t:v }"; text',
++    'multiline interpolation': 'let t = 42; let text = """\n#{t:p}\n"""; text',
++    'nested string interpolation': 'let text = "#{"x" ~ "y"}"; text',
++    'brace string interpolation': 'let text = "#{"}"}"; text',
++    'nested interpolation': 'let text = "#{"#{1}"}"; text',
++    'table interpolation': 'let text = "#{ {a = "}"}.a }"; text',
++    'raw string interpolation': 'let text = "#{\'"\'}"; text',
++    'commented interpolation': 'let text = "#{1 ## } ## }"; text',
++    'multiline nested interpolation': 'let text = """a "#{"""b"""}" c"""; text',
++    'removed keywords are names': 'let proc = 1; let macro = 2; let skip = 3; proc + macro + skip',
++    'parenthesized assignment continuation': 'do let x = 1; (x) = 2; x end',
++    'import string path': 'const m = import "./m"; m',
++    'import paren path': 'const m = import("./m"); m',
++    'spaced import paren': 'const m = import ("./m"); m',
++    'raw import path': "import './m'",
++    'multiline import path': 'import """./m"""',
++    'collection import': 'import("std:json")',
++    'use string path': 'use "./m"',
++    'use paren path': 'use("std:json")',
++    'import member call': 'import("./x").run()',
++    'import index': 'import("./t")["k"]',
++    'keyword table keys': 'let t = {end = 1, import = 2, use = 3, do = 4, type = 5, yield = 6}; t.end + t.import + t.use',
++}
++
++# Upstream accepts these; each sits next to a rejected form below.
++VALID_BOUNDARIES = {
++    'keyword field read': 'x.do; x.end',
++    'keyword field assignment': 'x.do = 1; x.end = 2',
++    'keyword method head': 'fn f.end() 1; fn obj:end() 1',
++    'keyword ambient path': 'declare x.end = number',
++    'keyword type path': 'type X.end = number',
++    'type name': 'let type = 1',
++    'import and use members': 'x.import; x.use; fn obj:use() 1; fn obj.import() 2',
++    'import and use record names': 'type R = {import: number, use: number}',
++    'import and use signature names': 'type F = fn(import: number, use: number) -> number',
++    'ordinary labels': 'do/outer 1 end; loop/again do break/again(1) end',
++    'bare string call': 'print "hello"',
++    'bare table call': 'f {a = 1}',
++    'bare field call': 'f.g "x"',
++    'bare call operand': 'a + b "x"',
++    'bare call before newline': 'f "x"\n"y"',
++    'bare call before semicolon': 'f "x"; "y"',
++    'literal after number': 'let a = 1 "x"',
++    'literal after index': 'x[1] "y"',
++    'underscored number': 'let n = 1_000 + 0b1_0',
++    'hex float': 'let n = 0x1.8p3',
++    'zero exponent and grouped fraction': 'let n = 0e5 + 0.5e-3 + 1_000.5 + 0x1_F',
++    'dotted integer field': 'let t = x.0.1',
++    'number method': 'let n = 1.5.max',
++    'parenthesized generic call': '(identity)<number>(2)',
++    'suite body on next line': 'suite "s"\ndo end',
++}
++
++INVALID_SYNTAX = {
++    'keyword let binding': 'let do = 1',
++    'keyword const binding': 'const end = 1',
++    'keyword parameters': 'fn f(do, end) 1',
++    'keyword loop variables': 'for do, end in xs do end',
++    'keyword do label': 'do/end 1 end',
++    'keyword loop label': 'loop/end do break/end(1) end',
++    'chained bare strings': 'f "x" "y"',
++    'chained bare table': 'f "x" {1}',
++    'chained raw strings': "f 'a' 'b'",
++    'chained bare call in binding': 'x = f "a" "b"',
++    'bare argument after call': 'f(1) "x"',
++    'bare argument after method call': 'x.f(1) "y"',
++    'doubled underscore': 'let n = 1__2',
++    'trailing underscore': 'let n = 1_',
++    'two decimal points': 'let n = 1.5.5',
++    'underscore before exponent': 'let n = 1_e5',
++    'empty hex prefix': 'let n = 0x',
++    'underscore after prefix': 'let n = 0x_1',
++    'binary digit out of range': 'let n = 0b12',
++    'uppercase base prefix': 'let n = 0X1F',
++    'leading zero': 'let n = 00',
++    'underscore after leading zero': 'let n = 0_1',
++    'second exponent': 'let n = 1e5e5',
++    'binary fraction': 'let n = 0b1.1',
++    'suite without body': 'suite "s"',
++    'import binding': 'let import = 1',
++    'use binding': 'let use = 1',
++    'import assignment': 'import = 1',
++    'import parameter': 'fn f(import) 1',
++    'use parameter': 'fn f(use) 1',
++    'import group': 'import {"a", b = "b"}',
++    'empty import group': 'import {}',
++    'computed import path': 'import(path)',
++    'computed use path': 'use path',
++    'nested import parens': 'import(("x"))',
++    'pub import': 'pub import "x"',
++    'import type name': 'type D = import',
++    'import ambient name': 'declare import = number',
++    'keyword key without value': 'let t = {end}',
++    'keyword key with type': 'let t = {end: number}',
++}
++
++EDITOR_RECOVERY = {
++    # Upstream rejects these. Editors preserve opaque strings/comment extras.
++    'unknown interpolation mode recovery': 'let t = 42; let text = "#{t:d}"; text',
++    'comment before dots recovery': 'for i in start##gap##..limit do i end',
++    # Import paths stay opaque strings; Revolt reports these.
++    'interpolated import path recovery': 'let x = 1; import "#{x}"',
++    'use stem not a name recovery': 'use "./my-mod"',
++    'use keyword stem recovery': 'use "./end"',
++}
++
++INVALID = {
++    'spaced numeric start': 'for i in 0 ..3 do i end',
++    'spaced computed start': 'for i in start ..limit do i end',
++    'spaced numeric step': 'for i in 0..2 ..3 do i end',
++    'spaced computed step': 'for i in start..step ..limit do i end',
++    'newline before dots': 'for i in start\n..limit do i end',
++    'tab before dots': 'for i in start\t..limit do i end',
++    'missing loop body': 'for i in 0..3',
++}
++
++INVALID_LEXICAL = {
++    'escaped quote in embedded code': 'let text = "#{f(\\"x\\")}"; text',
++    'doc comment in embedded code': 'let text = "#{#* doc *# 1}"; text',
++    'module doc in embedded code': 'let text = "#{#! doc !# 1}"; text',
++    'escaped raw string quote': "let text = 'a\\'b'; text",
++    'quasiquote': 'let q = `x`',
++    'macro declaration': 'macro twice! `x` `x + x`',
++    'proc macro declaration': 'pub proc twice!(x) x',
++    'suffix inside signature name': 'type F = fn(a?b: number) -> number',
++    'suffix inside record name': 'type R = {a?b: number}',
++    'doubled atom suffix': 'let x = :a?!',
++}
++
++
++def verify(grammar, library=None):
++    with Parser(grammar, library) as parser, tempfile.TemporaryDirectory(prefix='revo-upstream-') as directory:
++        fixture = Path(directory) / 'case.rv'
++        failures = []
++        groups = ((True, VALID), (True, VALID_BOUNDARIES), (True, EDITOR_RECOVERY),
++                  (False, INVALID), (False, INVALID_LEXICAL), (False, INVALID_SYNTAX))
++        for valid, cases in groups:
++            for label, source in cases.items():
++                fixture.write_text(source + '\n')
++                try:
++                    tree = parser.parse_tree(fixture, expect_errors=not valid)
++                except AssertionError:
++                    failures.append(label)
++                    continue
++                if valid and 'for i in ' in source and ' do ' in source:
++                    loop = next(tree.iter('for_loop_expression'), None)
++                    iterator = [] if loop is None else [node for node in loop if node.get('field') == 'iterator']
++                    if (not iterator or iterator[0].tag != 'range'
++                            or int(iterator[0].get('scol')) != source.index('for i in ') + len('for i in ')
++                            or int(iterator[-1].get('ecol')) != source.index(' do ')):
++                        failures.append(label + ': split iterator bounds')
++                if 'slice' in label:
++                    index = next(tree.iter('index'), None)
++                    if index is None or len(index) != 1 or index[0].tag != 'range':
++                        failures.append(label + ': split slice bounds')
++                if 'unary' in label:
++                    for unary in tree.iter('unary_expression'):
++                        if list(unary.iter('operation_expression')):
++                            failures.append(label + ': arithmetic swallowed by unary bound')
++                if label == 'parenthesized generic call' and next(tree.iter('function_call'), None) is None:
++                    failures.append(label + ': parsed as comparisons')
++                if valid and label.startswith('bare') and next(tree.iter('bare_call'), None) is None:
++                    failures.append(label + ': no bare_call node')
++                if 'interpolation' in label:
++                    strings = list(tree.iter('string'))
++                    if len(strings) != 1 or strings[0].text != source[source.index('"'):source.rindex('"') + 1]:
++                        failures.append(label + ': split string token')
++        assert not failures, failures
++    print(f'PASS: {len(VALID)} valid programs, {len(VALID_BOUNDARIES)} valid boundary programs, '
++          f'{len(EDITOR_RECOVERY)} editor recoveries, {len(INVALID)} invalid loop programs, '
++          f'{len(INVALID_LEXICAL)} invalid lexical programs and {len(INVALID_SYNTAX)} invalid syntax programs')
++
++
++if __name__ == '__main__':
++    arguments = argparse.ArgumentParser(description=__doc__)
++    arguments.add_argument('grammar', nargs='?', type=Path, default=Path(__file__).resolve().parents[2])
++    arguments.add_argument('--lib-path', type=Path)
++    options = arguments.parse_args()
++    verify(options.grammar, options.lib_path)
 diff --git a/test/ast/revo_parser.py b/test/ast/revo_parser.py
 new file mode 100644
-index 0000000..2f70458
+index 0000000..96b33f8
 --- /dev/null
 +++ b/test/ast/revo_parser.py
-@@ -0,0 +1,64 @@
+@@ -0,0 +1,78 @@
 +"""Private parser ownership for the grammar's AST checks and editor consumers."""
 +
 +import os
@@ -1156,6 +2005,7 @@ index 0000000..2f70458
 +import subprocess
 +import sys
 +import tempfile
++import xml.etree.ElementTree as ET
 +
 +
 +class Parser:
@@ -1209,16 +2059,29 @@ index 0000000..2f70458
 +        options = (["--xml"] if xml else []) + (["--quiet"] if quiet else [])
 +        return self._run("parse", [*options, str(Path(fixture).resolve())])
 +
++    def parse_tree(self, fixture, *, expect_errors=False):
++        """Decode a CLI tree and check recovery. None accepts either outcome."""
++        result = self.parse(fixture, xml=True)
++        if "</sources>" not in result.stdout:
++            raise RuntimeError(result.stderr or result.stdout or "Parser returned no syntax tree")
++        tree = ET.fromstring(result.stdout.split("</sources>", 1)[0] + "</sources>")
++        # The CLI reports MISSING nodes through its exit status, but leaves
++        # their XML elements unmarked. Explicit recovery nodes are ERROR tags.
++        has_errors = result.returncode != 0 or any(node.tag == "ERROR" for node in tree.iter())
++        if expect_errors is not None and has_errors != expect_errors:
++            raise AssertionError(result.stdout or result.stderr)
++        return tree
++
 +    def query(self, query, fixture):
 +        return self._run(
 +            "query", ["--captures", str(Path(query).resolve()), str(Path(fixture).resolve())],
 +        )
 diff --git a/test/corpus/compatibility.test b/test/corpus/compatibility.test
 new file mode 100644
-index 0000000..97f4f0c
+index 0000000..c91fdab
 --- /dev/null
 +++ b/test/corpus/compatibility.test
-@@ -0,0 +1,334 @@
+@@ -0,0 +1,327 @@
 +======================================================================
 +Generic function and type declarations
 +======================================================================
@@ -1267,7 +2130,7 @@ index 0000000..97f4f0c
 +======================================================================
 +
 +match value
-+| left: num, right: string => left
++| left: number, right: string => left
 +
 +---
 +
@@ -1387,17 +2250,10 @@ index 0000000..97f4f0c
 +identity?<num>(2)
 +identity<T?>(2)
 +identity<T!>(2)
-+identity<T!x>(2)
 +
 +---
 +
 +(source
-+  (function_call
-+    name: (ident)
-+    (ident)
-+    (parameters
-+      (parameter
-+        name: (number))))
 +  (function_call
 +    name: (ident)
 +    (ident)
@@ -1555,10 +2411,10 @@ index 0000000..97f4f0c
 +      right: (string))))
 diff --git a/test/corpus/current-expressions.test b/test/corpus/current-expressions.test
 new file mode 100644
-index 0000000..2a9325c
+index 0000000..b1b0366
 --- /dev/null
 +++ b/test/corpus/current-expressions.test
-@@ -0,0 +1,498 @@
+@@ -0,0 +1,506 @@
 +================
 +iterator call
 +================
@@ -1951,7 +2807,7 @@ index 0000000..2a9325c
 +        body: (number)))))
 +
 +================
-+empty macro call
++empty bang-name call
 +================
 +
 +fmt!()
@@ -1959,24 +2815,32 @@ index 0000000..2a9325c
 +---
 +
 +(source
-+  (macro_call
++  (function_call
 +    name: (ident)
-+    (macro_parameters)))
++    (parameters)))
 +
 +================
-+trailing macro comma
++trailing call comma
 +================
 +
 +fmt!(42,)
++f(1, 2,)
 +
 +---
 +
 +(source
-+  (macro_call
++  (function_call
 +    name: (ident)
-+    (macro_parameters
-+      (expression
-+        (number)))))
++    (parameters
++      (parameter
++        name: (number))))
++  (function_call
++    name: (ident)
++    (parameters
++      (parameter
++        name: (number))
++      (parameter
++        name: (number)))))
 +
 +================
 +generic indexed path is comparison
@@ -2059,7 +2923,7 @@ index 0000000..2a9325c
 +          name: (number))))))
 diff --git a/test/corpus/final-expressions.test b/test/corpus/final-expressions.test
 new file mode 100644
-index 0000000..d16e939
+index 0000000..50c76ec
 --- /dev/null
 +++ b/test/corpus/final-expressions.test
 @@ -0,0 +1,110 @@
@@ -2124,7 +2988,7 @@ index 0000000..d16e939
 +      (parameters))))
 +
 +================
-+qualified macro call
++qualified bang-name call
 +================
 +
 +let x = proc_lib.add_one!(m.pi) |> m.double()
@@ -2137,12 +3001,12 @@ index 0000000..d16e939
 +    value: (operation_expression
 +      left: (ident)
 +      left: (scoped
-+        (macro_call
++        (function_call
 +          name: (ident)
-+          (macro_parameters
-+            (expression
-+              (ident)
-+              (scoped
++          (parameters
++            (parameter
++              name: (ident)
++              name: (scoped
 +                (ident))))))
 +      (operator)
 +      right: (ident)
@@ -2173,12 +3037,79 @@ index 0000000..d16e939
 +    (parameters
 +      (parameter
 +        name: (number)))))
+diff --git a/test/corpus/functions.test b/test/corpus/functions.test
+index 01a2c84..440c567 100644
+--- a/test/corpus/functions.test
++++ b/test/corpus/functions.test
+@@ -170,7 +170,7 @@ Union return one liner
+ :language(revo)
+ ======================
+ 
+-fn thing() -> string | Thing | int "a"
++fn thing() -> string | Thing | number "a"
+ 
+ ---
+ 
+diff --git a/test/corpus/literals.test b/test/corpus/literals.test
+index 3e3992e..cbfd250 100644
+--- a/test/corpus/literals.test
++++ b/test/corpus/literals.test
+@@ -196,7 +196,7 @@ Strings with comment chars
+   (string))
+ 
+ ===============
+-Escaped strings
++Multiline and raw strings
+ :language(revo)
+ ===============
+ 
+@@ -208,9 +208,40 @@ hey
+ Whats up
+ '''
+ 
++'C:\path\'
++
+ ---
+ 
+ (source
++  (string)
++  (string)
++  (string)
++  (string)
++  (string))
++
++===============
++Interpolations are code
++:language(revo)
++===============
++
++"#{"x" ~ "y"}"
++"#{"}"}"
++"#{"#{1}"}"
++"#{ {a = "}"}.a }"
++"#{'"'}"
++"""a "#{"""b"""}" c"""
++"#{1 ## } ## }"
++"a\"b \#{"
++
++---
++
++(source
++  (string)
++  (string)
++  (string)
++  (string)
++  (string)
++  (string)
+   (string)
+   (string))
+     
 diff --git a/test/corpus/types-compatibility.test b/test/corpus/types-compatibility.test
 new file mode 100644
-index 0000000..cdc5321
+index 0000000..4a0a8aa
 --- /dev/null
 +++ b/test/corpus/types-compatibility.test
-@@ -0,0 +1,385 @@
+@@ -0,0 +1,367 @@
 +======================================================================
 +Structural function signatures and generic callbacks
 +======================================================================
@@ -2224,7 +3155,7 @@ index 0000000..cdc5321
 +======================================================================
 +
 +pub declare fmt = fn(format: string, args: any...) -> string
-+pub declare chan = fn(?capacity: num...) -> {:chan, num}
++pub declare chan = fn(?capacity: number...) -> {:chan, number}
 +type Callback = fn(fn: function, ?end: number...,) -> :ok
 +
 +---
@@ -2427,7 +3358,7 @@ index 0000000..cdc5321
 +======================================================================
 +
 +declare table = {
-+  at: fn<T>(self: table<T>, index: num) -> T | :undef,
++  at: fn<T>(self: table<T>, index: number) -> T | :undef,
 +  nan?: fn(self: number) -> bool,
 +  type: string,
 +  end: string,
@@ -2480,25 +3411,6 @@ index 0000000..cdc5321
 +        type: (primitive)))))
 +
 +======================================================================
-+Import groups with aliases empty groups and trailing comma
-+======================================================================
-+
-+import {"proc_lib", m = "math_lib",}
-+import {}
-+
-+---
-+
-+(source
-+  (import
-+    (import_group
-+      (string)
-+      (import_binding
-+        name: (ident)
-+        path: (string))))
-+  (import
-+    (import_group)))
-+
-+======================================================================
 +Atom digit suffixes and symbolic atoms
 +======================================================================
 +
@@ -2513,6 +3425,7 @@ index 0000000..cdc5321
 +  (atom)
 +  (atom)
 +  (atom)
++  (number)
 +  (atom))
 +
 +======================================================================
@@ -2566,10 +3479,10 @@ index 0000000..cdc5321
 +      value: (atom))))
 diff --git a/test/corpus/types-continuations.test b/test/corpus/types-continuations.test
 new file mode 100644
-index 0000000..d3dc163
+index 0000000..51ff89e
 --- /dev/null
 +++ b/test/corpus/types-continuations.test
-@@ -0,0 +1,431 @@
+@@ -0,0 +1,423 @@
 +======================================================================
 +Result types in unions
 +======================================================================
@@ -2636,7 +3549,7 @@ index 0000000..d3dc163
 +Every compiler keyword as a signature parameter
 +======================================================================
 +
-+type T = fn(const: number, global: number, let: number, comp: number, proc: number, macro: number, test: number, suite: number, skip: number, type: number, fn: number, if: number, unless: number, else: number, match: number, when: number, do: number, end: number, loop: number, for: number, while: number, in: number, break: number, continue: number, return: number, import: number, spawn: number, yield: number, and: number, or: number, not: number, band: number, bor: number, bxor: number, shl: number, shr: number, orelse: number, pub: number, declare: number) -> number
++type T = fn(const: number, global: number, let: number, comp: number, proc: number, macro: number, test: number, suite: number, skip: number, type: number, fn: number, if: number, unless: number, else: number, match: number, when: number, do: number, end: number, loop: number, for: number, while: number, in: number, break: number, continue: number, return: number, import: number, spawn: number, yield: number, and: number, or: number, not: number, band: number, bor: number, bxor: number, shl: number, shr: number, orelse: number, pub: number, declare: number, use: number) -> number
 +
 +---
 +
@@ -2645,6 +3558,9 @@ index 0000000..d3dc163
 +    type: (type)
 +    value: (function_signature
 +      (parameters
++        (parameter
++          name: (ident)
++          type: (primitive))
 +        (parameter
 +          name: (ident)
 +          type: (primitive))
@@ -2769,7 +3685,7 @@ index 0000000..d3dc163
 +Every compiler keyword as a structural field
 +======================================================================
 +
-+type T = {const: number, global: number, let: number, comp: number, proc: number, macro: number, test: number, suite: number, skip: number, type: number, fn: number, if: number, unless: number, else: number, match: number, when: number, do: number, end: number, loop: number, for: number, while: number, in: number, break: number, continue: number, return: number, import: number, spawn: number, yield: number, and: number, or: number, not: number, band: number, bor: number, bxor: number, shl: number, shr: number, orelse: number, pub: number, declare: number}
++type T = {const: number, global: number, let: number, comp: number, proc: number, macro: number, test: number, suite: number, skip: number, type: number, fn: number, if: number, unless: number, else: number, match: number, when: number, do: number, end: number, loop: number, for: number, while: number, in: number, break: number, continue: number, return: number, import: number, spawn: number, yield: number, and: number, or: number, not: number, band: number, bor: number, bxor: number, shl: number, shr: number, orelse: number, pub: number, declare: number, use: number}
 +
 +---
 +
@@ -2777,6 +3693,9 @@ index 0000000..d3dc163
 +  (type_expression
 +    type: (type)
 +    value: (table
++      (field
++        name: (ident)
++        type: (primitive))
 +      (field
 +        name: (ident)
 +        type: (primitive))
@@ -2901,21 +3820,13 @@ index 0000000..d3dc163
 +
 +type A = number!
 +type B = a!
-+type C = a?b
-+type D = import
 +type E = type
-+type F = fn(a?b: number, number!: string, ready?: number) -> number
-+type G = {a!: number, a?b: string, ready?: number}
++type F = fn(number!: string, ready?: number) -> number
++type G = {a!: number, ready?: number}
 +
 +---
 +
 +(source
-+  (type_expression
-+    type: (type)
-+    value: (ident))
-+  (type_expression
-+    type: (type)
-+    value: (ident))
 +  (type_expression
 +    type: (type)
 +    value: (ident))
@@ -2934,18 +3845,12 @@ index 0000000..d3dc163
 +          type: (primitive))
 +        (parameter
 +          name: (ident)
-+          type: (primitive))
-+        (parameter
-+          name: (ident)
 +          type: (primitive)))
 +      (return_type
 +        (primitive))))
 +  (type_expression
 +    type: (type)
 +    value: (table
-+      (field
-+        name: (ident)
-+        type: (primitive))
 +      (field
 +        name: (ident)
 +        type: (primitive))
@@ -3003,15 +3908,15 @@ index 0000000..d3dc163
 +      (ERROR))))
 diff --git a/test/corpus/types-records.test b/test/corpus/types-records.test
 new file mode 100644
-index 0000000..2a125ad
+index 0000000..c10710a
 --- /dev/null
 +++ b/test/corpus/types-records.test
-@@ -0,0 +1,69 @@
+@@ -0,0 +1,68 @@
 +======================================================================
 +Positional structural function and punctuation types
 +======================================================================
 +
-+type Entries = {fn(value: number) -> number, a?b, a!, number?, table<number>}
++type Entries = {fn(value: number) -> number, a!, number?, table<number>}
 +
 +---
 +
@@ -3026,7 +3931,6 @@ index 0000000..2a125ad
 +            type: (primitive)))
 +        (return_type
 +          (primitive)))
-+      (ident)
 +      (ident)
 +      (ident)
 +      (ident
@@ -3076,3 +3980,1489 @@ index 0000000..2a125ad
 +            left: (ident)
 +            (operator)
 +            right: (number)))))))
+diff --git a/test/corpus/types.test b/test/corpus/types.test
+index 612ed75..6a4923d 100644
+--- a/test/corpus/types.test
++++ b/test/corpus/types.test
+@@ -20,7 +20,7 @@ All Types Of Types
+ pub type ComponentId = atom
+ type ArchetypeId = table<ComponentId>
+ pub type Archetype = table<any>
+-type Entity = int
++type Entity = number
+ 
+ ---
+ (source
+@@ -46,7 +46,7 @@ Generic type alias
+ :language(revo)
+ ==================
+ 
+-pub type Test = table<atom | int, SomeType, string>
++pub type Test = table<atom | number, SomeType, string>
+ 
+ ---
+ 
+diff --git a/test/corpus/upstream-2ef8637.test b/test/corpus/upstream-2ef8637.test
+new file mode 100644
+index 0000000..7277dc6
+--- /dev/null
++++ b/test/corpus/upstream-2ef8637.test
+@@ -0,0 +1,133 @@
++================
++import paths
++================
++
++import "./a"
++import("./b")
++import 'raw.rv'
++import("std:json")
++
++---
++
++(source
++  (import
++    (string))
++  (import
++    (string))
++  (import
++    (string))
++  (import
++    (string)))
++
++================
++use paths
++================
++
++use "./x"
++use("std:json")
++
++---
++
++(source
++  (use
++    (string))
++  (use
++    (string)))
++
++================
++import results are values
++================
++
++const json = import("std:json")
++import("./x").run()
++import("./t")["k"]
++
++---
++
++(source
++  (declaration
++    pattern: (ident)
++    value: (import
++      (string)))
++  (import
++    (string))
++  (scoped
++    (function_call
++      name: (ident)
++      (parameters)))
++  (import
++    (string))
++  (index
++    (string)))
++
++================
++keyword table keys
++================
++
++let t = {end = 1, import = 2, use = 3, do = 4, type = 5, yield = 6}
++t.end + t.import + t.use
++
++---
++
++(source
++  (declaration
++    pattern: (ident)
++    value: (table
++      (field
++        name: (ident)
++        value: (number))
++      (field
++        name: (ident)
++        value: (number))
++      (field
++        name: (ident)
++        value: (number))
++      (field
++        name: (ident)
++        value: (number))
++      (field
++        name: (ident)
++        value: (number))
++      (field
++        name: (ident)
++        value: (number))))
++  (operation_expression
++    left: (operation_expression
++      left: (ident)
++      left: (scoped
++        (ident))
++      (operator)
++      right: (ident)
++      right: (scoped
++        (ident)))
++    (operator)
++    right: (ident)
++    right: (scoped
++      (ident))))
++
++================
++keyword member names
++================
++
++x.use
++fn obj:use() 1
++fn obj.import() 2
++
++---
++
++(source
++  (ident)
++  (scoped
++    (ident))
++  (function
++    name: (ident)
++    name: (ident)
++    (parameters)
++    body: (expression
++      (number)))
++  (function
++    name: (ident)
++    name: (ident)
++    (parameters)
++    body: (expression
++      (number))))
+diff --git a/test/corpus/upstream-current.test b/test/corpus/upstream-current.test
+new file mode 100644
+index 0000000..e8b6aea
+--- /dev/null
++++ b/test/corpus/upstream-current.test
+@@ -0,0 +1,1208 @@
++================
++numeric range
++================
++
++for i in 0..3 do i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    iterator: (range
++      (number)
++      (number))
++    body: (expression
++      (do_block
++        body: (ident)))))
++
++================
++computed range
++================
++
++for i in start..limit do i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    iterator: (range
++      (ident)
++      (ident))
++    body: (expression
++      (do_block
++        body: (ident)))))
++
++================
++stepped range
++================
++
++for i in start..step..limit do i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    iterator: (range
++      (ident)
++      (ident)
++      (ident))
++    body: (expression
++      (do_block
++        body: (ident)))))
++
++================
++leading range
++================
++
++for i in ..3 do i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    iterator: (range
++      (number))
++    body: (expression
++      (do_block
++        body: (ident)))))
++
++================
++leading computed range
++================
++
++for i in ..limit do i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    iterator: (range
++      (ident))
++    body: (expression
++      (do_block
++        body: (ident)))))
++
++================
++fully open range
++================
++
++for i in .. do i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    iterator: (range)
++    body: (expression
++      (do_block
++        body: (ident)))))
++
++================
++open numeric range
++================
++
++for i in 0.. do i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    iterator: (range
++      (number))
++    body: (expression
++      (do_block
++        body: (ident)))))
++
++================
++open computed range
++================
++
++for i in start.. do i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    iterator: (range
++      (ident))
++    body: (expression
++      (do_block
++        body: (ident)))))
++
++================
++space after dots starts body
++================
++
++for i in 0.. 3
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    iterator: (range
++      (number))
++    body: (expression
++      (number))))
++
++================
++open stepped range
++================
++
++for i in 0..2.. do i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    iterator: (range
++      (number)
++      (number))
++    body: (expression
++      (do_block
++        body: (ident)))))
++
++================
++negative step
++================
++
++for i in 10..-2.. do i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    iterator: (range
++      (number)
++      (unary_expression
++        (operator)
++        (number)))
++    body: (expression
++      (do_block
++        body: (ident)))))
++
++================
++grouped computed bounds
++================
++
++for i in (start + 1)..(limit - 1) do i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    iterator: (range
++      (operation_expression
++        left: (ident)
++        (operator)
++        right: (number))
++      (operation_expression
++        left: (ident)
++        (operator)
++        right: (number)))
++    body: (expression
++      (do_block
++        body: (ident)))))
++
++================
++slice without bounds
++================
++
++let xs = {1, 2, 3}; xs[..]
++
++---
++
++(source
++  (declaration
++    pattern: (ident)
++    value: (table
++      (number)
++      (number)
++      (number)))
++  (ident)
++  (index
++    (range)))
++
++================
++slice without start
++================
++
++let xs = {1, 2, 3}; xs[..1]
++
++---
++
++(source
++  (declaration
++    pattern: (ident)
++    value: (table
++      (number)
++      (number)
++      (number)))
++  (ident)
++  (index
++    (range
++      (number))))
++
++================
++slice without end
++================
++
++let xs = {1, 2, 3}; xs[1..]
++
++---
++
++(source
++  (declaration
++    pattern: (ident)
++    value: (table
++      (number)
++      (number)
++      (number)))
++  (ident)
++  (index
++    (range
++      (number))))
++
++================
++slice reverse
++================
++
++let xs = {1, 2, 3}; xs[..-1..]
++
++---
++
++(source
++  (declaration
++    pattern: (ident)
++    value: (table
++      (number)
++      (number)
++      (number)))
++  (ident)
++  (index
++    (range
++      (unary_expression
++        (operator)
++        (number)))))
++
++================
++slice computed bounds
++================
++
++let xs = {1, 2, 3}; xs[start..step..limit]
++
++---
++
++(source
++  (declaration
++    pattern: (ident)
++    value: (table
++      (number)
++      (number)
++      (number)))
++  (ident)
++  (index
++    (range
++      (ident)
++      (ident)
++      (ident))))
++
++================
++slice whitespace
++================
++
++let xs = {1, 2, 3}; xs[ start .. step .. limit ]
++
++---
++
++(source
++  (declaration
++    pattern: (ident)
++    value: (table
++      (number)
++      (number)
++      (number)))
++  (ident)
++  (index
++    (range
++      (ident)
++      (ident)
++      (ident))))
++
++================
++plain interpolation
++================
++
++let t = 42; let text = "#{t}"; text
++
++---
++
++(source
++  (declaration
++    pattern: (ident)
++    value: (number))
++  (declaration
++    pattern: (ident)
++    value: (string))
++  (ident))
++
++================
++display interpolation
++================
++
++let t = 42; let text = "#{t:v}"; text
++
++---
++
++(source
++  (declaration
++    pattern: (ident)
++    value: (number))
++  (declaration
++    pattern: (ident)
++    value: (string))
++  (ident))
++
++================
++debug interpolation
++================
++
++let t = 42; let text = "#{t:?}"; text
++
++---
++
++(source
++  (declaration
++    pattern: (ident)
++    value: (number))
++  (declaration
++    pattern: (ident)
++    value: (string))
++  (ident))
++
++================
++pretty interpolation
++================
++
++let t = 42; let text = "#{t:p}"; text
++
++---
++
++(source
++  (declaration
++    pattern: (ident)
++    value: (number))
++  (declaration
++    pattern: (ident)
++    value: (string))
++  (ident))
++
++================
++atom interpolation
++================
++
++let text = "#{:d}"; text
++
++---
++
++(source
++  (declaration
++    pattern: (ident)
++    value: (string))
++  (ident))
++
++================
++mode trailing whitespace
++================
++
++let t = 42; let text = "#{t:v }"; text
++
++---
++
++(source
++  (declaration
++    pattern: (ident)
++    value: (number))
++  (declaration
++    pattern: (ident)
++    value: (string))
++  (ident))
++
++================
++multiline interpolation
++================
++
++let t = 42; let text = """
++#{t:p}
++"""; text
++
++---
++
++(source
++  (declaration
++    pattern: (ident)
++    value: (number))
++  (declaration
++    pattern: (ident)
++    value: (string))
++  (ident))
++
++================
++parenthesized assignment continuation
++================
++
++do let x = 1; (x) = 2; x end
++
++---
++
++(source
++  (do_block
++    body: (declaration
++      pattern: (ident)
++      value: (number))
++    body: (operation_expression
++      left: (ident)
++      (operator)
++      right: (number))
++    body: (ident)))
++
++================
++unknown interpolation mode recovery
++================
++
++let t = 42; let text = "#{t:d}"; text
++
++---
++
++(source
++  (declaration
++    pattern: (ident)
++    value: (number))
++  (declaration
++    pattern: (ident)
++    value: (string))
++  (ident))
++
++================
++comment before dots recovery
++================
++
++for i in start##gap##..limit do i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    iterator: (range
++      (ident)
++      (multiline_comment)
++      (ident))
++    body: (expression
++      (do_block
++        body: (ident)))))
++
++================
++spaced numeric start
++================
++
++for i in 0 ..3 do i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    iterator: (number)
++    (ERROR)
++    iterator: (scoped
++      (integer))
++    body: (expression
++      (do_block
++        body: (ident)))))
++
++================
++spaced computed start
++================
++
++for i in start ..limit do i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    iterator: (ident)
++    (ERROR)
++    iterator: (scoped
++      (ident))
++    body: (expression
++      (do_block
++        body: (ident)))))
++
++================
++spaced numeric step
++================
++
++for i in 0..2 ..3 do i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    (ERROR
++      (range
++        (number)
++        (number)))
++    iterator: (range
++      (number))
++    body: (expression
++      (do_block
++        body: (ident)))))
++
++================
++spaced computed step
++================
++
++for i in start..step ..limit do i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    (ERROR
++      (range
++        (ident)
++        (ident)))
++    iterator: (range
++      (ident))
++    body: (expression
++      (do_block
++        body: (ident)))))
++
++================
++newline before dots
++================
++
++for i in start
++..limit do i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    iterator: (ident)
++    (ERROR)
++    iterator: (scoped
++      (ident))
++    body: (expression
++      (do_block
++        body: (ident)))))
++
++================
++tab before dots
++================
++
++for i in start	..limit do i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    iterator: (ident)
++    (ERROR)
++    iterator: (scoped
++      (ident))
++    body: (expression
++      (do_block
++        body: (ident)))))
++
++================
++underscored range step
++================
++
++for i in 0..1_0..3 do break i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    iterator: (range
++      (number)
++      (number)
++      (number))
++    body: (expression
++      (do_block
++        body: (break
++          condition: (ident))))))
++
++================
++exponent range step
++================
++
++for i in 0..0e0..3 do break i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    iterator: (range
++      (number)
++      (number)
++      (number))
++    body: (expression
++      (do_block
++        body: (break
++          condition: (ident))))))
++
++================
++hexadecimal range step
++================
++
++for i in 0..0x0..3 do break i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    iterator: (range
++      (number)
++      (number)
++      (number))
++    body: (expression
++      (do_block
++        body: (break
++          condition: (ident))))))
++
++================
++underscored range end
++================
++
++for i in 0..3_0 do break i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    iterator: (range
++      (number)
++      (number))
++    body: (expression
++      (do_block
++        body: (break
++          condition: (ident))))))
++
++================
++exponent range end
++================
++
++for i in 0..3e0 do break i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    iterator: (range
++      (number)
++      (number))
++    body: (expression
++      (do_block
++        body: (break
++          condition: (ident))))))
++
++================
++hexadecimal range end
++================
++
++for i in 0..0x3 do break i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    iterator: (range
++      (number)
++      (number))
++    body: (expression
++      (do_block
++        body: (break
++          condition: (ident))))))
++
++================
++underscored slice step
++================
++
++let xs = {1, 2, 3}; xs[0..1_0..3]
++
++---
++
++(source
++  (declaration
++    pattern: (ident)
++    value: (table
++      (number)
++      (number)
++      (number)))
++  (ident)
++  (index
++    (range
++      (number)
++      (number)
++      (number))))
++
++================
++arithmetic range end
++================
++
++for i in 0..2 + 3 do break i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    (range
++      (number)
++      (operation_expression
++        (number)
++        (operator)
++        (number)))
++    (expression
++      (do_block
++        (break
++          (ident))))))
++
++================
++subtracted range end
++================
++
++for i in 0..5 - 1 do break i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    (range
++      (number)
++      (operation_expression
++        (number)
++        (operator)
++        (number)))
++    (expression
++      (do_block
++        (break
++          (ident))))))
++
++================
++multiplied range end
++================
++
++for i in 0..2 * 3 do break i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    (range
++      (number)
++      (operation_expression
++        (number)
++        (operator)
++        (number)))
++    (expression
++      (do_block
++        (break
++          (ident))))))
++
++================
++bitwise range end
++================
++
++for i in 0..2 bor 3 do break i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    (range
++      (number)
++      (operation_expression
++        (number)
++        (operator)
++        (number)))
++    (expression
++      (do_block
++        (break
++          (ident))))))
++
++================
++arithmetic range step
++================
++
++for i in 0..1 + 1..5 do break i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    (range
++      (number)
++      (operation_expression
++        (number)
++        (operator)
++        (number))
++      (number))
++    (expression
++      (do_block
++        (break
++          (ident))))))
++
++================
++arithmetic stepped range end
++================
++
++for i in 0..1..2 + 3 do break i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    (range
++      (number)
++      (number)
++      (operation_expression
++        (number)
++        (operator)
++        (number)))
++    (expression
++      (do_block
++        (break
++          (ident))))))
++
++================
++fractional stepped range end
++================
++
++for i in 0..1..2.5 do break i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    (range
++      (number)
++      (number)
++      (number))
++    (expression
++      (do_block
++        (break
++          (ident))))))
++
++================
++arithmetic range start
++================
++
++for i in 1 + 1..4 do break i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    (range
++      (operation_expression
++        (number)
++        (operator)
++        (number))
++      (number))
++    (expression
++      (do_block
++        (break
++          (ident))))))
++
++================
++arithmetic slice end
++================
++
++let xs = {1, 2, 3}; xs[0..1 + 1]
++
++---
++
++(source
++  (declaration
++    (ident)
++    (table
++      (number)
++      (number)
++      (number)))
++  (ident)
++  (index
++    (range
++      (number)
++      (operation_expression
++        (number)
++        (operator)
++        (number)))))
++
++================
++unary range end
++================
++
++for i in 0..-1 + 2 do break i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    (range
++      (number)
++      (operation_expression
++        (unary_expression
++          (operator)
++          (number))
++        (operator)
++        (number)))
++    (expression
++      (do_block
++        (break
++          (ident))))))
++
++================
++mixed unary range end
++================
++
++for i in 0..2 * -1 + 4 do break i end
++
++---
++
++(source
++  (for_loop_expression
++    (ident)
++    (range
++      (number)
++      (operation_expression
++        (operation_expression
++          (number)
++          (operator)
++          (unary_expression
++            (operator)
++            (number)))
++        (operator)
++        (number)))
++    (expression
++      (do_block
++        (break
++          (ident))))))
++
++================
++unary call range end
++================
++
++fn bound() 2; for i in 0..-bound() + 4 do break i end
++
++---
++
++(source
++  (function
++    (ident)
++    (parameters)
++    (expression
++      (number)))
++  (for_loop_expression
++    (ident)
++    (range
++      (number)
++      (operation_expression
++        (unary_expression
++          (operator)
++          (function_call
++            (ident)
++            (parameters)))
++        (operator)
++        (number)))
++    (expression
++      (do_block
++        (break
++          (ident))))))
++
++================
++unary slice end
++================
++
++let xs = {1, 2, 3}; xs[0..-1 + 2]
++
++---
++
++(source
++  (declaration
++    (ident)
++    (table
++      (number)
++      (number)
++      (number)))
++  (ident)
++  (index
++    (range
++      (number)
++      (operation_expression
++        (unary_expression
++          (operator)
++          (number))
++        (operator)
++        (number)))))
++
++================
++mixed unary slice end
++================
++
++let xs = {1, 2, 3}; xs[0..2 * -1 + 4]
++
++---
++
++(source
++  (declaration
++    (ident)
++    (table
++      (number)
++      (number)
++      (number)))
++  (ident)
++  (index
++    (range
++      (number)
++      (operation_expression
++        (operation_expression
++          (number)
++          (operator)
++          (unary_expression
++            (operator)
++            (number)))
++        (operator)
++        (number)))))
++
++================
++unary call slice end
++================
++
++fn bound() 2; let xs = {1, 2, 3}; xs[0..-bound() + 4]
++
++---
++
++(source
++  (function
++    (ident)
++    (parameters)
++    (expression
++      (number)))
++  (declaration
++    (ident)
++    (table
++      (number)
++      (number)
++      (number)))
++  (ident)
++  (index
++    (range
++      (number)
++      (operation_expression
++        (unary_expression
++          (operator)
++          (function_call
++            (ident)
++            (parameters)))
++        (operator)
++        (number)))))
++
++================
++removed keywords and number aliases are names
++================
++
++let proc = 1
++let macro = 2
++let skip = 3
++proc + macro + skip
++let x: num = 1
++type I = int
++
++---
++
++(source
++  (declaration
++    pattern: (ident)
++    value: (number))
++  (declaration
++    pattern: (ident)
++    value: (number))
++  (declaration
++    pattern: (ident)
++    value: (number))
++  (operation_expression
++    left: (operation_expression
++      left: (ident)
++      (operator)
++      right: (ident))
++    (operator)
++    right: (ident))
++  (declaration
++    pattern: (ident)
++    type: (ident)
++    value: (number))
++  (type_expression
++    type: (type)
++    value: (ident)))
++
++================
++comments inside generic arguments
++================
++
++identity<number, ##comment## T>(2)
++identity<number, #comment
++  T>(2)
++
++---
++
++(source
++  (function_call
++    name: (ident)
++    (ident)
++    (multiline_comment)
++    (ident)
++    (parameters
++      (parameter
++        name: (number))))
++  (function_call
++    name: (ident)
++    (ident)
++    (comment)
++    (ident)
++    (parameters
++      (parameter
++        name: (number)))))
+diff --git a/test/corpus/upstream-eefa192.test b/test/corpus/upstream-eefa192.test
+new file mode 100644
+index 0000000..84aaa62
+--- /dev/null
++++ b/test/corpus/upstream-eefa192.test
+@@ -0,0 +1,105 @@
++================
++bare string call
++================
++
++print "hello"
++
++---
++
++(source
++  (bare_call
++    name: (ident)
++    argument: (string)))
++
++================
++bare field call with a table
++================
++
++f.g {a = 1}
++
++---
++
++(source
++  (bare_call
++    name: (ident)
++    name: (scoped
++      (ident))
++    argument: (table
++      (field
++        name: (ident)
++        value: (number)))))
++
++================
++bare call ends at a newline
++================
++
++f "x"
++"y"
++
++---
++
++(source
++  (bare_call
++    name: (ident)
++    argument: (string))
++  (string))
++
++================
++parenthesized generic receiver
++================
++
++(identity)<number>(2)
++
++---
++
++(source
++  (function_call
++    name: (ident)
++    (ident)
++    (parameters
++      (parameter
++        name: (number)))))
++
++================
++suite body
++================
++
++suite "group" do
++  test "one" do 1 end
++end
++
++---
++
++(source
++  (suite
++    name: (string)
++    body: (do_block
++      (test
++        name: (string)
++        body: (do_block
++          body: (number))))))
++
++================
++keyword member names
++================
++
++x.end = 1
++fn f.do() x.end
++
++---
++
++(source
++  (operation_expression
++    left: (ident)
++    left: (scoped
++      (ident))
++    (operator)
++    right: (number))
++  (function
++    name: (ident)
++    name: (ident)
++    (parameters)
++    body: (expression
++      (ident)
++      (scoped
++        (ident)))))

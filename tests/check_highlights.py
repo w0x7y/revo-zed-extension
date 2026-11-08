@@ -44,6 +44,7 @@ expected = {
     capture("keyword", 14, "spawn"),
     capture("keyword", 15, "match"),
     capture("type", 18, "state"),
+    capture("keyword", 19, "use"),
 }
 missing = expected - found
 if missing:

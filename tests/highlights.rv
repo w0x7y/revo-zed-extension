@@ -17,3 +17,4 @@ let value = match {:ok, 42}
 | {:ok, result} => result
 | {:err, error} => 0
 type state = number
+use("std:json")

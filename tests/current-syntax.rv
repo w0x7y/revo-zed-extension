@@ -19,3 +19,6 @@ let typed = match 1
 | value: number => value
 | _ => 0
 fn lower<t,>(value: t) -> t value
+use("std:json")
+const helper = import("./helper")
+let keys = {end = 1, import = 2, use = 3}
