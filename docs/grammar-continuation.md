@@ -9,7 +9,7 @@ grammar 0.1.2, updated from `e21a027cdb987617137e0a0a499558fb6df3447e`. The new
 commit follows Revo's new imports.
 
 The audit uses Revo compiler commit
-[`2ef863727625faff2ce4530886a958cf982da508`](https://github.com/if-not-nil/revo/commit/2ef863727625faff2ce4530886a958cf982da508)
+[`ebf3e79546e49f41d0e995221058c6867739987d`](https://github.com/if-not-nil/revo/commit/ebf3e79546e49f41d0e995221058c6867739987d)
 and Tree-sitter CLI 0.26.9. It moved from
 `e94e6d89ddaabb3249b38c1b10df87c700d1e8dc` to
 `f0034ab75aaf49d65bc1b4769987f99380383fcb` on 2026-10-10, when upstream
@@ -28,10 +28,11 @@ upstream added `dataframe.sort()` to its runtime library, to
 added `dataframe.row()` and `dataframe.filter()`, to
 `eefa192ea40d918d21630350219789e57fb6e661` on 2026-10-28, to
 `7b91491e7d0b0b8f164ff80ebd4b750ec5322f99` on 2026-11-06, when upstream added
-fix suggestions to lexer errors without changing the syntax it accepts, and to
-the current commit on 2026-11-08, when upstream made `import` and `use`
-keywords and merged its formatter. Only the moves to `eefa192` and the current
-commit changed the grammar. `eefa192` removes the `num` and `int` type aliases,
+fix suggestions to lexer errors without changing the syntax it accepts, to
+`2ef863727625faff2ce4530886a958cf982da508` on 2026-11-08, when upstream made `import` and `use`
+keywords and merged its formatter, and to the current commit on 2026-11-10,
+when upstream changed only how its formatter spaces `..`. Only the moves to
+`eefa192` and `2ef8637` changed the grammar. `eefa192` removes the `num` and `int` type aliases,
 and its parent,
 [`8680d687a0ea04e1738c5d1e67ce0863134cc677`](https://github.com/if-not-nil/revo/commit/8680d687a0ea04e1738c5d1e67ce0863134cc677),
 rewrites the lexer and parser around a concrete syntax tree and removes
@@ -50,7 +51,8 @@ and `tests/compatibility.toml` records this exception rather than silently
 excluding it from the result.
 
 The public grammar pin and the compiler audit were refreshed on 2026-11-08 for
-`2ef8637`. The pin refreshed on 2026-10-28 followed `eefa192`:
+`2ef8637`, and the audit again on 2026-11-10 for `ebf3e79`, which needs no
+grammar change. The pin refreshed on 2026-10-28 followed `eefa192`:
 `macro`, `proc` and `skip` are now ordinary names, so the grammar has no
 macro, procedural macro or quasiquote nodes and a backtick is a syntax error;
 `skip` still marks `test/skip`. A trailing `!` is part of an ordinary call
