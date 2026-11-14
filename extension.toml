@@ -1,6 +1,6 @@
 id = "revo"
 name = "Revo"
-version = "0.0.3"
+version = "0.0.4"
 schema_version = 1
 description = "Revo language support with syntax highlighting and the Revolt language server."
 authors = ["matthew <mattifex@gmail.com>", "Idan Gilboa <idangilb@gmail.com>"]
