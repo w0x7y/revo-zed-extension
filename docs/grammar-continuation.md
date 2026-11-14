@@ -4,12 +4,12 @@ The maintained grammar is published at
 [w0x7y/tree-sitter-revo](https://github.com/w0x7y/tree-sitter-revo), with all
 54 upstream commits retained and an MIT license crediting doomy, contributors
 and Idan Gilboa. `extension.toml` pins the reviewed public commit
-[`06beb1ed88d2f540b586254777c136e438f49164`](https://github.com/w0x7y/tree-sitter-revo/commit/06beb1ed88d2f540b586254777c136e438f49164),
-grammar 0.1.2, updated from `e21a027cdb987617137e0a0a499558fb6df3447e`. The new
-commit follows Revo's new imports.
+[`8800d5a957f02b48fad813447f9a4d1b88129de4`](https://github.com/w0x7y/tree-sitter-revo/commit/8800d5a957f02b48fad813447f9a4d1b88129de4),
+grammar 0.1.3, updated from `06beb1ed88d2f540b586254777c136e438f49164`. The new
+commit follows Revo's leading-bar unions, range values and `?`-suffixed names.
 
 The audit uses Revo compiler commit
-[`ebf3e79546e49f41d0e995221058c6867739987d`](https://github.com/if-not-nil/revo/commit/ebf3e79546e49f41d0e995221058c6867739987d)
+[`87719dc9ab33b865bc2a6fee35b7ed70d90abb36`](https://github.com/if-not-nil/revo/commit/87719dc9ab33b865bc2a6fee35b7ed70d90abb36)
 and Tree-sitter CLI 0.26.9. It moved from
 `e94e6d89ddaabb3249b38c1b10df87c700d1e8dc` to
 `f0034ab75aaf49d65bc1b4769987f99380383fcb` on 2026-10-10, when upstream
@@ -30,9 +30,12 @@ added `dataframe.row()` and `dataframe.filter()`, to
 `7b91491e7d0b0b8f164ff80ebd4b750ec5322f99` on 2026-11-06, when upstream added
 fix suggestions to lexer errors without changing the syntax it accepts, to
 `2ef863727625faff2ce4530886a958cf982da508` on 2026-11-08, when upstream made `import` and `use`
-keywords and merged its formatter, and to the current commit on 2026-11-10,
-when upstream changed only how its formatter spaces `..`. Only the moves to
-`eefa192` and `2ef8637` changed the grammar. `eefa192` removes the `num` and `int` type aliases,
+keywords and merged its formatter, to
+`ebf3e79546e49f41d0e995221058c6867739987d` on 2026-11-10, when upstream changed
+only how its formatter spaces `..`, and to the current commit on 2026-11-14,
+when upstream added leading-bar unions, made ranges values and moved `re`,
+`csv`, `compress` and `base64` into `std`. Only the moves to `eefa192`,
+`2ef8637` and `87719dc` changed the grammar. `eefa192` removes the `num` and `int` type aliases,
 and its parent,
 [`8680d687a0ea04e1738c5d1e67ce0863134cc677`](https://github.com/if-not-nil/revo/commit/8680d687a0ea04e1738c5d1e67ce0863134cc677),
 rewrites the lexer and parser around a concrete syntax tree and removes
@@ -41,9 +44,9 @@ The original upstream grammar base is `610fa6a4ff0fecd9cc81806e5e85ea61c92091b4`
 
 ## Verified coverage
 
-All 72 supported checked-in compiler `.rv` fixtures parse without errors.
-On the same 73 fixtures the original grammar parses 19 and the previous pin
-`e21a027` 64. The remaining `issues/match.rv` fixture contains unfinished
+All 75 supported checked-in compiler `.rv` fixtures parse without errors.
+On the same 76 fixtures the original grammar parses 19 and the previous pin
+`06beb1e` 74; it fails on `src/std/re.rv`, which declares `match?`. The remaining `issues/match.rv` fixture contains unfinished
 `..rest` table patterns and range match patterns. The current compiler
 rejects `..rest` while parsing and range patterns while compiling; the
 fixture explicitly marks both unfinished. The grammar retains its error,
@@ -51,8 +54,8 @@ and `tests/compatibility.toml` records this exception rather than silently
 excluding it from the result.
 
 The public grammar pin and the compiler audit were refreshed on 2026-11-08 for
-`2ef8637`, and the audit again on 2026-11-10 for `ebf3e79`, which needs no
-grammar change. The pin refreshed on 2026-10-28 followed `eefa192`:
+`2ef8637`, the audit again on 2026-11-10 for `ebf3e79`, which needs no
+grammar change, and both on 2026-11-14 for `87719dc`. The pin refreshed on 2026-10-28 followed `eefa192`:
 `macro`, `proc` and `skip` are now ordinary names, so the grammar has no
 macro, procedural macro or quasiquote nodes and a backtick is a syntax error;
 `skip` still marks `test/skip`. A trailing `!` is part of an ordinary call
@@ -96,6 +99,17 @@ a table key, as in `{end = 1, import = 2}`. `patches/tree-sitter-revo.patch`
 now reproduces this pin's grammar, queries, scanner and tests, so the Zed
 queries can use its newer nodes.
 
+The pin refreshed on 2026-11-14 follows Revo `87719dc`. A type may open with
+`|` when a newline comes before it, so a union can list one member per line,
+and a one-member leading-bar union is still a `union_type`. The scanner checks
+the newline, so `type A = | :a` is an error, as upstream. Unions with three or
+more members now stay in one `union_type` instead of splitting into a
+`union_expression`. Ranges are values outside loops, and `let s = 0..3..10` is
+a declaration whose value is a stepped `range`. Outside types a name ending in
+`?` is one `ident`, even after a keyword stem: upstream's `src/std/re.rv`
+declares `pub const match? = native.is_match`. Types keep the final `?` as the
+`optional_type` suffix, as in `number?`.
+
 Range bounds now use expression nodes for every numeric spelling, retaining the
 named `range` node. Arithmetic stays within its start, step or endpoint, and
 table index slices support computed and omitted bounds. Numeric bounds have
@@ -104,11 +118,11 @@ children rather than the opaque tokens used by pin
 The existing Zed queries compile against these structures, preserving numeric
 constant captures and variable captures in computed bounds.
 
-The pinned public grammar passes 201 corpus cases, including complete-program
+The pinned public grammar passes 208 corpus cases, including complete-program
 range and interpolation regressions with explicit editor recovery expectations.
 Separate checks verify 25 expression forms, 20 valid generic calls and 25 rejected
 generic-call forms, comparison trees, lexical nodes and function captures, and
-25 valid and 40 rejected programs at the compiler's newer syntax boundaries.
+25 valid and 42 rejected programs at the compiler's newer syntax boundaries.
 Unicode atom and receiver checks reject codepoints that could otherwise
 narrow to ASCII in the external scanner. Both native and Wasm parser builds
 pass. Independent fresh generation matches the committed parser, schemas
@@ -117,7 +131,7 @@ and C headers byte-for-byte.
 Covered additions include structural and positional function types, variadic
 signatures, nested generic applications, qualified/optional types, contextual
 keyword fields, tagged unions, atom digit suffixes, `import` and `use` paths,
-keyword table keys, keyed match syntax, computed/open iterator ranges, unary
+keyword table keys, leading-bar unions, `?`-suffixed names, keyed match syntax, computed/open iterator ranges, unary
 and postfix expressions, repeated/value calls, empty parentheses, labeled
 break values, and qualified `!`-suffixed calls with empty or trailing argument
 lists.

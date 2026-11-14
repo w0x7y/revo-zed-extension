@@ -22,3 +22,10 @@ fn lower<t,>(value: t) -> t value
 use("std:json")
 const helper = import("./helper")
 let keys = {end = 1, import = 2, use = 3}
+type Res =
+  | {:ok, number}
+  | {:err, string}
+  | :pending
+let steps = 0..3..10
+let ready? = :true
+fn done?(value) value == 10

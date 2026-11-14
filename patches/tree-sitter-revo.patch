@@ -1,8 +1,8 @@
 diff --git a/grammar.js b/grammar.js
-index 59e2572..96ca030 100644
+index 59e2572..fd5c005 100644
 --- a/grammar.js
 +++ b/grammar.js
-@@ -21,11 +21,39 @@ function repeat_comma(rule) {
+@@ -21,11 +21,42 @@ function repeat_comma(rule) {
    return optional(repeat_comma1(rule));
  }
  
@@ -21,6 +21,9 @@ index 59e2572..96ca030 100644
 +const SUFFIXED_NAME = /[A-Za-z_][A-Za-z0-9_]*[?!]?/;
 +// A final `?` stays the optional_type suffix.
 +const BANG_NAME = /[A-Za-z_][A-Za-z0-9_]*!?/;
++// Outside types a final `?` is part of the name, even after a keyword stem
++// such as `match?`. Types keep it as the optional_type suffix.
++const QUESTION_NAME = /[A-Za-z_][A-Za-z0-9_]*\?/;
 +// The compiler accepts every keyword as a contextual record or signature name.
 +const TYPE_NAME_KEYWORDS = [
 +  'const', 'let', 'test', 'suite', 'type', 'fn', 'if', 'unless', 'else',
@@ -43,7 +46,7 @@ index 59e2572..96ca030 100644
    extras: $ => [
      /\s/,
      $.documentation,
-@@ -34,23 +62,38 @@ export default grammar({
+@@ -34,23 +65,41 @@ export default grammar({
      $.module_doc,
      $.suite,
      $.test,
@@ -61,6 +64,7 @@ index 59e2572..96ca030 100644
 +    $._bare_arg,
 +    $._bare_arg_rejected,
 +    $._paren_generic,
++    $._leading_bar,
 +    // Never valid in a rule; marks error recovery and malformed numbers.
 +    $._error_sentinel,
    ],
@@ -76,6 +80,7 @@ index 59e2572..96ca030 100644
      _expression: $ => prec.left(3, choice(
 -      $.ident,
 +      $._primary_expression, $.operation_expression, $.unary_expression, $.range,
++      $.declaration, $.ambient_declaration,
 +    )),
 +    // Bounds stop at unparenthesized dots. Grouping keeps the ordinary
 +    // expression interface so explicitly nested ranges remain possible.
@@ -86,10 +91,11 @@ index 59e2572..96ca030 100644
 +    )),
 +    _primary_expression: $ => prec.left(3, choice(
 +      $._ident,
++      alias(QUESTION_NAME, $.ident),
        $.self,
        $.directive,
        $.do_block,
-@@ -58,8 +101,6 @@ export default grammar({
+@@ -58,8 +107,6 @@ export default grammar({
        $.conditional_expression,
        $.while_expression,
        $.loop_expression,
@@ -98,7 +104,7 @@ index 59e2572..96ca030 100644
        $.for_loop_expression,
        $.comp_expression,
        $.union_expression,
-@@ -69,9 +110,8 @@ export default grammar({
+@@ -69,9 +116,8 @@ export default grammar({
        $.match,
        $.function,
        $.function_call,
@@ -110,7 +116,7 @@ index 59e2572..96ca030 100644
        $.table,
        $.return,
        $._table_type,
-@@ -80,12 +120,14 @@ export default grammar({
+@@ -80,12 +126,12 @@ export default grammar({
        $.spawn,
        $.break,
        $.continue,
@@ -118,25 +124,25 @@ index 59e2572..96ca030 100644
        $.yield,
        $._scoped_expression,
        seq($._not, $._expression),
-       $.declaration,
+-      $.declaration,
 -      $.range,
-+      $.ambient_declaration,
 +      $.import,
 +      $.use,
 +      $._try_expression,
      )),
      declaration: $ => prec.right(seq(
        choice(
-@@ -94,7 +136,7 @@ export default grammar({
+@@ -94,7 +140,8 @@ export default grammar({
          'global',
        ),
        field('pattern',choice(
 -        $.ident,
 +        $._ident,
++        alias(QUESTION_NAME, $.ident),
          $.table,
        )),
        optional(seq(
-@@ -111,25 +153,22 @@ export default grammar({
+@@ -111,25 +158,22 @@ export default grammar({
        field('consequence', $.expression),
        optional(seq('else', field('alternative', $.expression))))),
      operator: $ => $._operator,
@@ -166,7 +172,7 @@ index 59e2572..96ca030 100644
        '+=',
        '-=',
        '/=',
-@@ -141,6 +180,7 @@ export default grammar({
+@@ -141,6 +185,7 @@ export default grammar({
        '>=',
        '!=',
        '~',
@@ -174,7 +180,7 @@ index 59e2572..96ca030 100644
        '|>',
        '//',
        'band',
-@@ -149,87 +189,167 @@ export default grammar({
+@@ -149,87 +194,171 @@ export default grammar({
        'shl',
        'shr',
        'orelse',
@@ -277,7 +283,10 @@ index 59e2572..96ca030 100644
        optional($.visibility_modifier),
        'fn',
 -      optional(seq(field('name', seq($.ident, repeat(seq(choice(':', '.'), $.ident)))), optional('?'))),
-+      optional(seq(field('name', seq($._ident, repeat(seq(choice(':', '.'), $._member_name)))), optional('?'))),
++      optional(seq(field('name', choice(
++        seq($._ident, repeat(seq(choice(':', '.'), $._member_name))),
++        alias(QUESTION_NAME, $.ident),
++      )), optional('?'))),
 +      optional($._generics),
        $.parameters,
        optional(field('return_type', $.return_type)),
@@ -357,6 +366,7 @@ index 59e2572..96ca030 100644
 +    _ordinary_function_call: $ => prec(4, seq(
 +      choice(
 +        field('name', seq($._ident, optional(choice('?', '!')))),
++        field('name', alias(QUESTION_NAME, $.ident)),
 +        field('name', $._identifier_indexed),
 +      ),
 +      alias($._call_parameters, $.parameters),
@@ -380,7 +390,7 @@ index 59e2572..96ca030 100644
      ),
      parameters: $ => seq(
        '(',
-@@ -240,11 +360,11 @@ export default grammar({
+@@ -240,11 +369,11 @@ export default grammar({
        ))),
        ')'
      ),
@@ -397,7 +407,7 @@ index 59e2572..96ca030 100644
      ),
      parameter: $ => seq(
        // Marks paramater as optional
-@@ -256,7 +376,7 @@ export default grammar({
+@@ -256,7 +385,7 @@ export default grammar({
        optional(
          seq(
            '=',
@@ -406,7 +416,7 @@ index 59e2572..96ca030 100644
          ),
        ),
      ),
-@@ -301,17 +421,15 @@ export default grammar({
+@@ -301,17 +430,15 @@ export default grammar({
        /@[^a-zA-Z_]/,  // @ not followed by an identifier start
      ))),
  
@@ -426,7 +436,7 @@ index 59e2572..96ca030 100644
        'string',
        'atom',
        'function',
-@@ -323,91 +441,171 @@ export default grammar({
+@@ -323,91 +450,175 @@ export default grammar({
      type_expression: $ => seq(
        optional($.visibility_modifier),
        'type',
@@ -502,10 +512,14 @@ index 59e2572..96ca030 100644
 +    _revo_type: $ => prec(4, choice($._type_atom, $.union_type, $.tagged_type)),
 +    result_type: $ => prec.right(seq(choice('!', 'not'), choice($._type_atom, $.union_type), optional(seq('/', $._revo_type)))),
 +    tagged_type: $ => prec.right(6, seq(choice($._plain_type_atom, $.union_type), '/', $._revo_type)),
-+    union_type: $ => prec.left(5, seq(
-+      $._type_atom,
-+      repeat1(seq('|', $._type_atom)),
++    // A `|` that starts a line may open a union, even a one-member union.
++    union_type: $ => prec.right(5, choice(
++      seq($._type_atom, $._union_rest),
++      seq($._leading_bar, $._type_atom, optional($._union_rest)),
      )),
++    // Right recursion keeps later members in the type rather than letting an
++    // expression union take them.
++    _union_rest: $ => prec.right(5, seq('|', $._type_atom, optional($._union_rest))),
      union_expression: $ => prec.left(seq($._expression, repeat1(prec.left(seq('|', $._expression))))),
      do_block: $ => seq(
        $._do,
@@ -645,7 +659,7 @@ index 59e2572..96ca030 100644
      )),
      while_expression: $ => seq(
        $._while,
-@@ -418,13 +616,13 @@ export default grammar({
+@@ -418,13 +629,13 @@ export default grammar({
        $._loop,
        field('body', $.expression),
      ),
@@ -821,10 +835,10 @@ index 370c566..7bdbda4 100644
 +"declare" @keyword
 +(function_signature (parameters (parameter name: (ident) @variable.parameter)))
 diff --git a/src/scanner.c b/src/scanner.c
-index 2761703..ee61bb3 100644
+index 2761703..4f1d712 100644
 --- a/src/scanner.c
 +++ b/src/scanner.c
-@@ -1,72 +1,380 @@
+@@ -1,72 +1,381 @@
  #include "tree_sitter/parser.h"
  #include <stdbool.h>
 -// #include "tree_sitter/alloc.h"
@@ -1233,6 +1247,7 @@ index 2761703..ee61bb3 100644
 +  BARE_ARG,
 +  BARE_ARG_REJECTED,
 +  PAREN_GENERIC,
++  LEADING_BAR,
 +  ERROR_SENTINEL,
  };
  
@@ -1241,7 +1256,7 @@ index 2761703..ee61bb3 100644
  void *tree_sitter_revo_external_scanner_create() {
    // Nothing needed here yet
    return NULL;
-@@ -86,13 +394,88 @@ void tree_sitter_revo_external_scanner_deserialize(void *payload,
+@@ -86,13 +395,105 @@ void tree_sitter_revo_external_scanner_deserialize(void *payload,
  bool tree_sitter_revo_external_scanner_scan(void *payload, TSLexer *lexer,
                                              const bool *valid_symbols) {
  
@@ -1268,6 +1283,23 @@ index 2761703..ee61bb3 100644
 +    if (!generic_arguments_ahead(lexer)) return false;
 +    lexer->result_symbol = PAREN_GENERIC;
 +    return true;
++  }
++
++  // A type may open with `|` only after a newline, as upstream's type parser
++  // checks. Pipes and `||` stay ordinary operators.
++  if (valid_symbols[LEADING_BAR] && !error_recovery) {
++    bool newline = false;
++    while (is_whitespace(lexer->lookahead)) {
++      if (lexer->lookahead == '\n') newline = true;
++      lexer->advance(lexer, true);
++    }
++    if (newline && lexer->lookahead == '|') {
++      lexer->advance(lexer, false);
++      if (lexer->lookahead == '|' || lexer->lookahead == '>') return false;
++      lexer->mark_end(lexer);
++      lexer->result_symbol = LEADING_BAR;
++      return true;
++    }
 +  }
 +
 +  // A string or table on the same line after a callable name is its single
@@ -1335,7 +1367,7 @@ index 2761703..ee61bb3 100644
    // Documentation
    if (next == '#' && valid_symbols[DOCUMENTATION]) {
      lexer->advance(lexer, false);
-@@ -120,153 +503,35 @@ bool tree_sitter_revo_external_scanner_scan(void *payload, TSLexer *lexer,
+@@ -120,153 +521,35 @@ bool tree_sitter_revo_external_scanner_scan(void *payload, TSLexer *lexer,
    }
    // Atoms
    else if (next == ':' && valid_symbols[ATOM]) {
@@ -1750,10 +1782,10 @@ index 0000000..a07f9eb
 +    verify(options.grammar, options.queries, options.lib_path)
 diff --git a/test/ast/check_upstream.py b/test/ast/check_upstream.py
 new file mode 100644
-index 0000000..3c10571
+index 0000000..8614928
 --- /dev/null
 +++ b/test/ast/check_upstream.py
-@@ -0,0 +1,238 @@
+@@ -0,0 +1,254 @@
 +"""Check complete programs at the current upstream syntax boundaries.
 +
 +Strings stay opaque editor tokens, including compiler-invalid interpolation
@@ -1835,6 +1867,20 @@ index 0000000..3c10571
 +    'import member call': 'import("./x").run()',
 +    'import index': 'import("./t")["k"]',
 +    'keyword table keys': 'let t = {end = 1, import = 2, use = 3, do = 4, type = 5, yield = 6}; t.end + t.import + t.use',
++    'leading bar union': 'type A =\n  | :one\n  | :two\nlet x: A = :one',
++    'leading bar one member': 'type One =\n  | {:ok, number}',
++    'leading bar tagged union': 'type R =\n| {:ok, number}\n| {:err, string} / :res',
++    'leading bar ambient': 'declare z =\n  | number\n  | string',
++    'leading bar annotation': 'let x:\n | number\n | string = 1',
++    'leading bar after comment': 'type A = # c\n  | :one\n  | :two',
++    'trailing bar continues union': 'type A =\n  | :one |\n  :two',
++    'three member union': 'type A = :a | :b | :c; let x: A = :c',
++    'stepped range value': 'let s = 0..3..10; s:collect()',
++    'question name binding': 'let ok? = :true; ok?',
++    'question name value': 'let ok? = :true; if (ok?) 1 else 2',
++    'keyword stem question name': 'pub const match? = native.is_match; match?("a", "b")',
++    'keyword stem question function': 'fn end?(a) a == 2; end?(2)',
++    'question name operands': 'a? and b?',
 +}
 +
 +# Upstream accepts these; each sits next to a rejected form below.
@@ -1907,6 +1953,8 @@ index 0000000..3c10571
 +    'import ambient name': 'declare import = number',
 +    'keyword key without value': 'let t = {end}',
 +    'keyword key with type': 'let t = {end: number}',
++    'same-line leading bar': 'type A = | :one | :two',
++    'double leading bar': 'type A =\n  || :one',
 +}
 +
 +EDITOR_RECOVERY = {
@@ -4141,6 +4189,164 @@ index 0000000..7277dc6
 +    (parameters)
 +    body: (expression
 +      (number))))
+diff --git a/test/corpus/upstream-87719dc.test b/test/corpus/upstream-87719dc.test
+new file mode 100644
+index 0000000..27b6f8b
+--- /dev/null
++++ b/test/corpus/upstream-87719dc.test
+@@ -0,0 +1,152 @@
++================
++leading bar union
++================
++
++type Res =
++    | {:ok, number}
++    | {:err, string}
++
++---
++
++(source
++  (type_expression
++    (type)
++    (union_type
++      (table
++        (atom)
++        (ident))
++      (table
++        (atom)
++        (ident)))))
++
++================
++leading bar union of atoms
++================
++
++type A =
++  | :one
++  | :two
++  | :three
++
++---
++
++(source
++  (type_expression
++    (type)
++    (union_type
++      (atom)
++      (atom)
++      (atom))))
++
++================
++leading bar one member
++================
++
++type One =
++  | {:ok, number}
++
++---
++
++(source
++  (type_expression
++    (type)
++    (union_type
++      (table
++        (atom)
++        (ident)))))
++
++================
++three member union
++================
++
++type A = :a | :b | :c
++
++---
++
++(source
++  (type_expression
++    (type)
++    (union_type
++      (atom)
++      (atom)
++      (atom))))
++
++================
++stepped range value
++================
++
++let s = 0..3..10
++
++---
++
++(source
++  (declaration
++    (ident)
++    (range
++      (number)
++      (number)
++      (number))))
++
++================
++four member union
++================
++
++type A = :a | :b | :c | :d
++
++---
++
++(source
++  (type_expression
++    (type)
++    (union_type
++      (atom)
++      (atom)
++      (atom)
++      (atom))))
++
++================
++question names
++================
++
++let ok? = :true
++pub const match? = native.is_match
++fn end?(a) a == 2
++if (ok?) end?(2) else match?(1)
++
++---
++
++(source
++  (declaration
++    (ident)
++    (atom))
++  (declaration
++    (visibility_modifier)
++    (ident)
++    (ident)
++    (scoped
++      (ident)))
++  (function
++    (ident)
++    (parameters
++      (parameter
++        (ident)))
++    (expression
++      (operation_expression
++        (ident)
++        (operator)
++        (number))))
++  (conditional_expression
++    (expression
++      (ident))
++    (expression
++      (function_call
++        (ident)
++        (parameters
++          (parameter
++            (number)))))
++    (expression
++      (function_call
++        (ident)
++        (parameters
++          (parameter
++            (number)))))))
 diff --git a/test/corpus/upstream-current.test b/test/corpus/upstream-current.test
 new file mode 100644
 index 0000000..e8b6aea
