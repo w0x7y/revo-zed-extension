@@ -9,7 +9,7 @@ grammar 0.1.3, updated from `06beb1ed88d2f540b586254777c136e438f49164`. The new
 commit follows Revo's leading-bar unions, range values and `?`-suffixed names.
 
 The audit uses Revo compiler commit
-[`87719dc9ab33b865bc2a6fee35b7ed70d90abb36`](https://github.com/if-not-nil/revo/commit/87719dc9ab33b865bc2a6fee35b7ed70d90abb36)
+[`2d0306cec2d2181b417945c3475d749c0370b0cd`](https://github.com/if-not-nil/revo/commit/2d0306cec2d2181b417945c3475d749c0370b0cd)
 and Tree-sitter CLI 0.26.9. It moved from
 `e94e6d89ddaabb3249b38c1b10df87c700d1e8dc` to
 `f0034ab75aaf49d65bc1b4769987f99380383fcb` on 2026-10-10, when upstream
@@ -32,9 +32,11 @@ fix suggestions to lexer errors without changing the syntax it accepts, to
 `2ef863727625faff2ce4530886a958cf982da508` on 2026-11-08, when upstream made `import` and `use`
 keywords and merged its formatter, to
 `ebf3e79546e49f41d0e995221058c6867739987d` on 2026-11-10, when upstream changed
-only how its formatter spaces `..`, and to the current commit on 2026-11-14,
-when upstream added leading-bar unions, made ranges values and moved `re`,
-`csv`, `compress` and `base64` into `std`. Only the moves to `eefa192`,
+only how its formatter spaces `..`, to
+`87719dc9ab33b865bc2a6fee35b7ed70d90abb36` on 2026-11-14, when upstream added
+leading-bar unions, made ranges values and moved `re`, `csv`, `compress` and
+`base64` into `std`, and to the current commit on 2026-11-15, when upstream
+dropped a stale `iter.range` declaration and fixed a scheduler thread-local. Only the moves to `eefa192`,
 `2ef8637` and `87719dc` changed the grammar. `eefa192` removes the `num` and `int` type aliases,
 and its parent,
 [`8680d687a0ea04e1738c5d1e67ce0863134cc677`](https://github.com/if-not-nil/revo/commit/8680d687a0ea04e1738c5d1e67ce0863134cc677),
@@ -55,7 +57,8 @@ excluding it from the result.
 
 The public grammar pin and the compiler audit were refreshed on 2026-11-08 for
 `2ef8637`, the audit again on 2026-11-10 for `ebf3e79`, which needs no
-grammar change, and both on 2026-11-14 for `87719dc`. The pin refreshed on 2026-10-28 followed `eefa192`:
+grammar change, both on 2026-11-14 for `87719dc`, and the audit on 2026-11-15
+for `2d0306c`, which needs no grammar change. The pin refreshed on 2026-10-28 followed `eefa192`:
 `macro`, `proc` and `skip` are now ordinary names, so the grammar has no
 macro, procedural macro or quasiquote nodes and a backtick is a syntax error;
 `skip` still marks `test/skip`. A trailing `!` is part of an ordinary call
