@@ -4,10 +4,10 @@ The maintained grammar is published at
 [w0x7y/tree-sitter-revo](https://github.com/w0x7y/tree-sitter-revo), with all
 54 upstream commits retained and an MIT license crediting doomy, contributors
 and Idan Gilboa. `extension.toml` pins the reviewed public commit
-[`12bb46b71e90273da1dea2c97982c38eeb77f870`](https://github.com/w0x7y/tree-sitter-revo/commit/12bb46b71e90273da1dea2c97982c38eeb77f870),
-grammar 0.1.5, updated from `2d601965926d97412249d64b2dbb76bd7928c34d`. The new
-commit requires a gap or punctuation after a type colon, as the compiler's
-lexer does.
+[`76346536442db0a78cc2325058b6d82a6448dbaa`](https://github.com/w0x7y/tree-sitter-revo/commit/76346536442db0a78cc2325058b6d82a6448dbaa),
+grammar 0.1.6, updated from `12bb46b71e90273da1dea2c97982c38eeb77f870`. The new
+commit rejects string and number types, which the compiler's type parser does
+not accept.
 
 The audit uses Revo compiler commit
 [`2d0306cec2d2181b417945c3475d749c0370b0cd`](https://github.com/if-not-nil/revo/commit/2d0306cec2d2181b417945c3475d749c0370b0cd)
@@ -120,7 +120,9 @@ type. The compiler lexes a `:` that touches a name or symbol as an atom, so a
 type colon needs a gap or punctuation after it. `x: number`, `x:{number}` and
 `x:(number)` are annotations, while `x:number`, `let x:number = 1`,
 `{a:number}` and `print(t:ok?)` are errors. Method calls such as `t:ok()` are
-unchanged.
+unchanged. Atoms are the only literal types, so `type T = :a | :b` parses
+while `let x: "s"`, `fn f(x: 1)`, `type T = "a" | "b"` and `{number, "s"}`
+are errors.
 
 Range bounds now use expression nodes for every numeric spelling, retaining the
 named `range` node. Arithmetic stays within its start, step or endpoint, and

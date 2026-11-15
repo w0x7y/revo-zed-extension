@@ -1,5 +1,5 @@
 diff --git a/grammar.js b/grammar.js
-index 59e2572..3ccd481 100644
+index 59e2572..7aa5a47 100644
 --- a/grammar.js
 +++ b/grammar.js
 @@ -21,11 +21,42 @@ function repeat_comma(rule) {
@@ -453,7 +453,7 @@ index 59e2572..3ccd481 100644
        'string',
        'atom',
        'function',
-@@ -323,91 +457,175 @@ export default grammar({
+@@ -323,91 +457,172 @@ export default grammar({
      type_expression: $ => seq(
        optional($.visibility_modifier),
        'type',
@@ -513,12 +513,11 @@ index 59e2572..3ccd481 100644
 +    qualified_type: $ => prec.right(5, seq(field('module', $._named_type_ident), '.', field('name', choice($.type, $._named_type_ident)), optional('?'))),
 +    grouped_type: $ => seq('(', $._revo_type, ')'),
 +    // Type atoms are shared by ordinary types, union variants and slash tags.
++    // Atoms are the only literal types upstream accepts; strings and numbers are errors.
 +    _plain_type_atom: $ => choice(
 +      $._type_or_primitive_or_optional,
 +      $._named_type_ident,
 +      $.atom,
-+      $.string,
-+      $.number,
 +      $.function_signature,
 +      $.parameterized_type,
 +      $.qualified_type,
@@ -623,8 +622,6 @@ index 59e2572..3ccd481 100644
 +      $._named_type_ident,
 +      alias(SUFFIXED_NAME, $.ident),
 +      $.atom,
-+      $.string,
-+      $.number,
 +      $.optional_type,
 +      $.function_signature,
 +      $.parameterized_type,
@@ -676,7 +673,7 @@ index 59e2572..3ccd481 100644
      )),
      while_expression: $ => seq(
        $._while,
-@@ -418,13 +636,16 @@ export default grammar({
+@@ -418,13 +633,16 @@ export default grammar({
        $._loop,
        field('body', $.expression),
      ),
@@ -1831,10 +1828,10 @@ index 0000000..a07f9eb
 +    verify(options.grammar, options.queries, options.lib_path)
 diff --git a/test/ast/check_upstream.py b/test/ast/check_upstream.py
 new file mode 100644
-index 0000000..dcd2838
+index 0000000..8e6b8fa
 --- /dev/null
 +++ b/test/ast/check_upstream.py
-@@ -0,0 +1,270 @@
+@@ -0,0 +1,278 @@
 +"""Check complete programs at the current upstream syntax boundaries.
 +
 +Strings stay opaque editor tokens, including compiler-invalid interpolation
@@ -1942,6 +1939,8 @@ index 0000000..dcd2838
 +    'type colon before a record': 'fn f(x:{number}) x',
 +    'type colon before a group': 'let x:(number) = 1',
 +    'type colon before an atom': 'let x::a = :a',
++    'atom union type': 'type T = :a | :b',
++    'string match arm': 'match x\n| "s" => 1\n| 2 => 2\n| _ => 3',
 +    'spaced type colon': 'fn f(x : number) x',
 +    'method call in arguments': 'f(a, b:c())',
 +    'keyword field read': 'x.do; x.end',
@@ -2020,6 +2019,12 @@ index 0000000..dcd2838
 +    'touching signature type': 'type F = fn(a: number, b:string)',
 +    'atom after a gap is not a type': 'fn f(x :number) x',
 +    'method name without a call': 'print(t:ok?)',
++    'string type': 'let x: "s" = "s"',
++    'number type': 'fn f(x: 1) x',
++    'string union type': 'type T = "a" | "b"',
++    'string record entry': 'type R = {number, "s"}',
++    'string type argument': 'type G = table<"s">',
++    'string return type': 'fn f() -> "s" "s"',
 +}
 +
 +EDITOR_RECOVERY = {
