@@ -1,5 +1,5 @@
 diff --git a/grammar.js b/grammar.js
-index 59e2572..7aa5a47 100644
+index 59e2572..36f19c1 100644
 --- a/grammar.js
 +++ b/grammar.js
 @@ -21,11 +21,42 @@ function repeat_comma(rule) {
@@ -46,7 +46,7 @@ index 59e2572..7aa5a47 100644
    extras: $ => [
      /\s/,
      $.documentation,
-@@ -34,23 +65,42 @@ export default grammar({
+@@ -34,23 +65,44 @@ export default grammar({
      $.module_doc,
      $.suite,
      $.test,
@@ -72,7 +72,9 @@ index 59e2572..7aa5a47 100644
 -  // conflicts: $ => [
 -  //   [ $.ident, $.type ]
 -  // ],
-+  conflicts: $ => [[$._expression, $._range_bound], [$.range]],
++  conflicts: $ => [[$._expression, $._range_bound], [$.range], [$._scoped_call_tail], [$._scoped_call_tail, $.scoped]],
++  // Inlined so `.a[1]` resolves as it did when the segment lived inside `scoped`.
++  inline: $ => [$._scoped_segment],
    rules: {
 -    source: $ => repeat($._expression),
 +    source: $ => repeat(choice($._expression, ';')),
@@ -96,7 +98,7 @@ index 59e2572..7aa5a47 100644
        $.self,
        $.directive,
        $.do_block,
-@@ -58,8 +108,6 @@ export default grammar({
+@@ -58,8 +110,6 @@ export default grammar({
        $.conditional_expression,
        $.while_expression,
        $.loop_expression,
@@ -105,7 +107,7 @@ index 59e2572..7aa5a47 100644
        $.for_loop_expression,
        $.comp_expression,
        $.union_expression,
-@@ -69,9 +117,8 @@ export default grammar({
+@@ -69,9 +119,8 @@ export default grammar({
        $.match,
        $.function,
        $.function_call,
@@ -117,7 +119,7 @@ index 59e2572..7aa5a47 100644
        $.table,
        $.return,
        $._table_type,
-@@ -80,12 +127,12 @@ export default grammar({
+@@ -80,12 +129,12 @@ export default grammar({
        $.spawn,
        $.break,
        $.continue,
@@ -133,7 +135,7 @@ index 59e2572..7aa5a47 100644
      )),
      declaration: $ => prec.right(seq(
        choice(
-@@ -94,11 +141,12 @@ export default grammar({
+@@ -94,42 +143,50 @@ export default grammar({
          'global',
        ),
        field('pattern',choice(
@@ -148,7 +150,23 @@ index 59e2572..7aa5a47 100644
          field('type', $._revo_type)
        )),
        '=',
-@@ -111,25 +159,22 @@ export default grammar({
+       field('value', $._expression),
+     )),
+-    spawn: $ => seq('spawn', $.function_call),
++    // Upstream spawns any call, including member and method calls; a group
++    // stays lenient and Revolt reports a non-call inside it.
++    spawn: $ => seq('spawn', choice($.function_call, $._scoped_call, $._association)),
++    _scoped_call: $ => prec.left(5, seq($._expression, alias($._scoped_call_tail, $.scoped))),
++    _scoped_call_tail: $ => prec.right(seq(
++      repeat(seq($._scoped_segment, optional($.index))),
++      choice(
++        seq('.', choice(alias($._member_call, $.function_call), alias($._question_member_call, $.function_call))),
++        seq(':', alias($._member_call, $.function_call)),
++      ),
++    )),
+     conditional_expression: $ => prec.left(seq(
+       choice('if', 'unless'),
+       field('condition', $.expression),
        field('consequence', $.expression),
        optional(seq('else', field('alternative', $.expression))))),
      operator: $ => $._operator,
@@ -178,7 +196,7 @@ index 59e2572..7aa5a47 100644
        '+=',
        '-=',
        '/=',
-@@ -141,6 +186,7 @@ export default grammar({
+@@ -141,6 +198,7 @@ export default grammar({
        '>=',
        '!=',
        '~',
@@ -186,7 +204,7 @@ index 59e2572..7aa5a47 100644
        '|>',
        '//',
        'band',
-@@ -149,87 +195,177 @@ export default grammar({
+@@ -149,87 +207,177 @@ export default grammar({
        'shl',
        'shr',
        'orelse',
@@ -402,7 +420,7 @@ index 59e2572..7aa5a47 100644
      ),
      parameters: $ => seq(
        '(',
-@@ -240,23 +376,23 @@ export default grammar({
+@@ -240,23 +388,23 @@ export default grammar({
        ))),
        ')'
      ),
@@ -433,7 +451,7 @@ index 59e2572..7aa5a47 100644
          ),
        ),
      ),
-@@ -301,17 +437,15 @@ export default grammar({
+@@ -301,17 +449,15 @@ export default grammar({
        /@[^a-zA-Z_]/,  // @ not followed by an identifier start
      ))),
  
@@ -453,7 +471,7 @@ index 59e2572..7aa5a47 100644
        'string',
        'atom',
        'function',
-@@ -323,91 +457,172 @@ export default grammar({
+@@ -323,91 +469,172 @@ export default grammar({
      type_expression: $ => seq(
        optional($.visibility_modifier),
        'type',
@@ -673,26 +691,33 @@ index 59e2572..7aa5a47 100644
      )),
      while_expression: $ => seq(
        $._while,
-@@ -418,13 +633,16 @@ export default grammar({
+@@ -418,17 +645,16 @@ export default grammar({
        $._loop,
        field('body', $.expression),
      ),
 -    _scoped_expression: $ => prec(3, seq($._expression, $.scoped)),
 +    _scoped_expression: $ => prec.left(5, seq($._expression, $.scoped)),
      scoped: $ => prec.right(seq(
-       repeat1(
-         seq(
-           choice(
+-      repeat1(
+-        seq(
+-          choice(
 -            seq('.', choice($.function_call, $.ident, $.integer)),
 -            seq(':', $.function_call),
-+            seq('.', choice(
-+              alias($._member_call, $.function_call), alias($._question_member_call, $.function_call),
-+              $._member_name, alias(QUESTION_NAME, $.ident), $.integer,
-+            )),
-+            seq(':', alias($._member_call, $.function_call)),
-           ),
-           optional($.index),
-         )
+-          ),
+-          optional($.index),
+-        )
+-      ),
++      repeat1(seq($._scoped_segment, optional($.index))),
+     )),
++    _scoped_segment: $ => choice(
++      seq('.', choice(
++        alias($._member_call, $.function_call), alias($._question_member_call, $.function_call),
++        $._member_name, alias(QUESTION_NAME, $.ident), $.integer,
++      )),
++      seq(':', alias($._member_call, $.function_call)),
++    ),
+   }
+ });
 diff --git a/queries/highlights.scm b/queries/highlights.scm
 index 370c566..7bdbda4 100644
 --- a/queries/highlights.scm
@@ -1828,10 +1853,10 @@ index 0000000..a07f9eb
 +    verify(options.grammar, options.queries, options.lib_path)
 diff --git a/test/ast/check_upstream.py b/test/ast/check_upstream.py
 new file mode 100644
-index 0000000..8e6b8fa
+index 0000000..62b3c0d
 --- /dev/null
 +++ b/test/ast/check_upstream.py
-@@ -0,0 +1,278 @@
+@@ -0,0 +1,287 @@
 +"""Check complete programs at the current upstream syntax boundaries.
 +
 +Strings stay opaque editor tokens, including compiler-invalid interpolation
@@ -1932,6 +1957,12 @@ index 0000000..8e6b8fa
 +    'question field call': 'x.ok?(1).y; re.match?(r, "abbc")',
 +    'question loop variable': 'for k, v? in t do v? end',
 +    'question table key': 'let x = {ok? = 1, match? = 2}',
++    'spawn member call': 'const h = spawn net.connect("127.0.0.1", port)',
++    'spawn method call': 'const h = spawn a:m(1)',
++    'spawn nested member call': 'spawn a.c.b(1); spawn x.a[1](2); spawn a.ok?(1)',
++    'spawn group': 'spawn (f(1))',
++    'spawn call operand': 'spawn a.b(1) + 1',
++    'index after method result': 'json.decode("{}"):unwrap().a[1]',
 +}
 +
 +# Upstream accepts these; each sits next to a rejected form below.
@@ -2025,6 +2056,9 @@ index 0000000..8e6b8fa
 +    'string record entry': 'type R = {number, "s"}',
 +    'string type argument': 'type G = table<"s">',
 +    'string return type': 'fn f() -> "s" "s"',
++    'spawn without a call': 'spawn 1',
++    'spawn member without a call': 'spawn a.b',
++    'spawn call then field': 'spawn f(1).x',
 +}
 +
 +EDITOR_RECOVERY = {

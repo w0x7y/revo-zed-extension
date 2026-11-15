@@ -32,3 +32,4 @@ fn done?(value) value == 10
 for key, done? in {:true} do done? end
 let flags = {}
 flags.ready? = :true
+const worker = spawn helper.run(1)
