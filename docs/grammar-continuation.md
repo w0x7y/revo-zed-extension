@@ -4,9 +4,9 @@ The maintained grammar is published at
 [w0x7y/tree-sitter-revo](https://github.com/w0x7y/tree-sitter-revo), with all
 54 upstream commits retained and an MIT license crediting doomy, contributors
 and Idan Gilboa. `extension.toml` pins the reviewed public commit
-[`8800d5a957f02b48fad813447f9a4d1b88129de4`](https://github.com/w0x7y/tree-sitter-revo/commit/8800d5a957f02b48fad813447f9a4d1b88129de4),
-grammar 0.1.3, updated from `06beb1ed88d2f540b586254777c136e438f49164`. The new
-commit follows Revo's leading-bar unions, range values and `?`-suffixed names.
+[`2d601965926d97412249d64b2dbb76bd7928c34d`](https://github.com/w0x7y/tree-sitter-revo/commit/2d601965926d97412249d64b2dbb76bd7928c34d),
+grammar 0.1.4, updated from `8800d5a957f02b48fad813447f9a4d1b88129de4`. The new
+commit also parses `?`-suffixed names after `.` and as loop variables.
 
 The audit uses Revo compiler commit
 [`2d0306cec2d2181b417945c3475d749c0370b0cd`](https://github.com/if-not-nil/revo/commit/2d0306cec2d2181b417945c3475d749c0370b0cd)
@@ -111,7 +111,11 @@ more members now stay in one `union_type` instead of splitting into a
 a declaration whose value is a stepped `range`. Outside types a name ending in
 `?` is one `ident`, even after a keyword stem: upstream's `src/std/re.rv`
 declares `pub const match? = native.is_match`. Types keep the final `?` as the
-`optional_type` suffix, as in `number?`.
+`optional_type` suffix, as in `number?`. The pin refreshed on 2026-11-15 also
+accepts these names as fields after `.`, as in `x.ok? = 1` and
+`re.match?(r, s)`, and as loop variables, as in `for k, v? in t`. After `:` a
+method name still takes a separate `?`, so `f(x: number?)` keeps its optional
+type.
 
 Range bounds now use expression nodes for every numeric spelling, retaining the
 named `range` node. Arithmetic stays within its start, step or endpoint, and
@@ -121,7 +125,7 @@ children rather than the opaque tokens used by pin
 The existing Zed queries compile against these structures, preserving numeric
 constant captures and variable captures in computed bounds.
 
-The pinned public grammar passes 208 corpus cases, including complete-program
+The pinned public grammar passes 209 corpus cases, including complete-program
 range and interpolation regressions with explicit editor recovery expectations.
 Separate checks verify 25 expression forms, 20 valid generic calls and 25 rejected
 generic-call forms, comparison trees, lexical nodes and function captures, and

@@ -29,3 +29,6 @@ type Res =
 let steps = 0..3..10
 let ready? = :true
 fn done?(value) value == 10
+for key, done? in {:true} do done? end
+let flags = {}
+flags.ready? = :true

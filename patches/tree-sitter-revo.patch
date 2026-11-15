@@ -1,5 +1,5 @@
 diff --git a/grammar.js b/grammar.js
-index 59e2572..fd5c005 100644
+index 59e2572..3fd9e4b 100644
 --- a/grammar.js
 +++ b/grammar.js
 @@ -21,11 +21,42 @@ function repeat_comma(rule) {
@@ -180,7 +180,7 @@ index 59e2572..fd5c005 100644
        '|>',
        '//',
        'band',
-@@ -149,87 +194,171 @@ export default grammar({
+@@ -149,87 +194,177 @@ export default grammar({
        'shl',
        'shr',
        'orelse',
@@ -199,6 +199,12 @@ index 59e2572..fd5c005 100644
 +    // Reserved word sets apply to the token step, so member contexts spell out
 +    // both identifier terminals instead of referring to the _ident rule.
 +    _member_name: $ => reserved('member', choice($.ident, alias(IDENT_PASCAL, $.ident))),
++    // Only after `.`: after `:` a `?` name would take `number?` in `f(x: number?)`.
++    _question_member_call: $ => prec(4, seq(
++      field('name', alias(QUESTION_NAME, $.ident)),
++      alias($._call_parameters, $.parameters),
++      optional($._bare_chain),
++    )),
 +    _member_call: $ => prec(4, seq(
 +      field('name', choice(
 +        seq($._member_name, optional(choice('?', '!'))),
@@ -390,7 +396,7 @@ index 59e2572..fd5c005 100644
      ),
      parameters: $ => seq(
        '(',
-@@ -240,11 +369,11 @@ export default grammar({
+@@ -240,11 +375,11 @@ export default grammar({
        ))),
        ')'
      ),
@@ -407,7 +413,7 @@ index 59e2572..fd5c005 100644
      ),
      parameter: $ => seq(
        // Marks paramater as optional
-@@ -256,7 +385,7 @@ export default grammar({
+@@ -256,7 +391,7 @@ export default grammar({
        optional(
          seq(
            '=',
@@ -416,7 +422,7 @@ index 59e2572..fd5c005 100644
          ),
        ),
      ),
-@@ -301,17 +430,15 @@ export default grammar({
+@@ -301,17 +436,15 @@ export default grammar({
        /@[^a-zA-Z_]/,  // @ not followed by an identifier start
      ))),
  
@@ -436,7 +442,7 @@ index 59e2572..fd5c005 100644
        'string',
        'atom',
        'function',
-@@ -323,91 +450,175 @@ export default grammar({
+@@ -323,91 +456,175 @@ export default grammar({
      type_expression: $ => seq(
        optional($.visibility_modifier),
        'type',
@@ -650,7 +656,7 @@ index 59e2572..fd5c005 100644
        'for',
 -      $.ident,
 +      optional(field('label', $._label)),
-+      repeat_comma1($._ident),
++      repeat_comma1(choice($._ident, alias(QUESTION_NAME, $.ident))),
        'in',
 -      choice($.range, $.ident),
 -      $.expression
@@ -659,7 +665,7 @@ index 59e2572..fd5c005 100644
      )),
      while_expression: $ => seq(
        $._while,
-@@ -418,13 +629,13 @@ export default grammar({
+@@ -418,13 +635,16 @@ export default grammar({
        $._loop,
        field('body', $.expression),
      ),
@@ -671,7 +677,10 @@ index 59e2572..fd5c005 100644
            choice(
 -            seq('.', choice($.function_call, $.ident, $.integer)),
 -            seq(':', $.function_call),
-+            seq('.', choice(alias($._member_call, $.function_call), $._member_name, $.integer)),
++            seq('.', choice(
++              alias($._member_call, $.function_call), alias($._question_member_call, $.function_call),
++              $._member_name, alias(QUESTION_NAME, $.ident), $.integer,
++            )),
 +            seq(':', alias($._member_call, $.function_call)),
            ),
            optional($.index),
@@ -1782,10 +1791,10 @@ index 0000000..a07f9eb
 +    verify(options.grammar, options.queries, options.lib_path)
 diff --git a/test/ast/check_upstream.py b/test/ast/check_upstream.py
 new file mode 100644
-index 0000000..8614928
+index 0000000..b26a25b
 --- /dev/null
 +++ b/test/ast/check_upstream.py
-@@ -0,0 +1,254 @@
+@@ -0,0 +1,259 @@
 +"""Check complete programs at the current upstream syntax boundaries.
 +
 +Strings stay opaque editor tokens, including compiler-invalid interpolation
@@ -1881,6 +1890,11 @@ index 0000000..8614928
 +    'keyword stem question name': 'pub const match? = native.is_match; match?("a", "b")',
 +    'keyword stem question function': 'fn end?(a) a == 2; end?(2)',
 +    'question name operands': 'a? and b?',
++    'question field read': 'let x = {}; x.ok?; x.match?',
++    'question field assignment': 'x.ok? = 1',
++    'question field call': 'x.ok?(1).y; re.match?(r, "abbc")',
++    'question loop variable': 'for k, v? in t do v? end',
++    'question table key': 'let x = {ok? = 1, match? = 2}',
 +}
 +
 +# Upstream accepts these; each sits next to a rejected form below.
@@ -4191,10 +4205,10 @@ index 0000000..7277dc6
 +      (number))))
 diff --git a/test/corpus/upstream-87719dc.test b/test/corpus/upstream-87719dc.test
 new file mode 100644
-index 0000000..27b6f8b
+index 0000000..1c1d442
 --- /dev/null
 +++ b/test/corpus/upstream-87719dc.test
-@@ -0,0 +1,152 @@
+@@ -0,0 +1,186 @@
 +================
 +leading bar union
 +================
@@ -4347,6 +4361,40 @@ index 0000000..27b6f8b
 +        (parameters
 +          (parameter
 +            (number)))))))
++
++================
++question fields and loop variables
++================
++
++x.ok? = 1
++re.match?(r, "abbc")
++for k, v? in t do v? end
++
++---
++
++(source
++  (operation_expression
++    (ident)
++    (scoped
++      (ident))
++    (operator)
++    (number))
++  (ident)
++  (scoped
++    (function_call
++      (ident)
++      (parameters
++        (parameter
++          (ident))
++        (parameter
++          (string)))))
++  (for_loop_expression
++    (ident)
++    (ident)
++    (ident)
++    (expression
++      (do_block
++        (ident)))))
 diff --git a/test/corpus/upstream-current.test b/test/corpus/upstream-current.test
 new file mode 100644
 index 0000000..e8b6aea
