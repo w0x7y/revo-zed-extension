@@ -1,5 +1,5 @@
 diff --git a/grammar.js b/grammar.js
-index 59e2572..3fd9e4b 100644
+index 59e2572..3ccd481 100644
 --- a/grammar.js
 +++ b/grammar.js
 @@ -21,11 +21,42 @@ function repeat_comma(rule) {
@@ -46,7 +46,7 @@ index 59e2572..3fd9e4b 100644
    extras: $ => [
      /\s/,
      $.documentation,
-@@ -34,23 +65,41 @@ export default grammar({
+@@ -34,23 +65,42 @@ export default grammar({
      $.module_doc,
      $.suite,
      $.test,
@@ -65,13 +65,14 @@ index 59e2572..3fd9e4b 100644
 +    $._bare_arg_rejected,
 +    $._paren_generic,
 +    $._leading_bar,
++    $._type_colon,
 +    // Never valid in a rule; marks error recovery and malformed numbers.
 +    $._error_sentinel,
    ],
 -  // conflicts: $ => [
 -  //   [ $.ident, $.type ]
 -  // ],
-+  conflicts: $ => [[$._expression, $._range_bound], [$.range], [$._ident, $._member_name]],
++  conflicts: $ => [[$._expression, $._range_bound], [$.range]],
    rules: {
 -    source: $ => repeat($._expression),
 +    source: $ => repeat(choice($._expression, ';')),
@@ -95,7 +96,7 @@ index 59e2572..3fd9e4b 100644
        $.self,
        $.directive,
        $.do_block,
-@@ -58,8 +107,6 @@ export default grammar({
+@@ -58,8 +108,6 @@ export default grammar({
        $.conditional_expression,
        $.while_expression,
        $.loop_expression,
@@ -104,7 +105,7 @@ index 59e2572..3fd9e4b 100644
        $.for_loop_expression,
        $.comp_expression,
        $.union_expression,
-@@ -69,9 +116,8 @@ export default grammar({
+@@ -69,9 +117,8 @@ export default grammar({
        $.match,
        $.function,
        $.function_call,
@@ -116,7 +117,7 @@ index 59e2572..3fd9e4b 100644
        $.table,
        $.return,
        $._table_type,
-@@ -80,12 +126,12 @@ export default grammar({
+@@ -80,12 +127,12 @@ export default grammar({
        $.spawn,
        $.break,
        $.continue,
@@ -132,7 +133,7 @@ index 59e2572..3fd9e4b 100644
      )),
      declaration: $ => prec.right(seq(
        choice(
-@@ -94,7 +140,8 @@ export default grammar({
+@@ -94,11 +141,12 @@ export default grammar({
          'global',
        ),
        field('pattern',choice(
@@ -142,7 +143,12 @@ index 59e2572..3fd9e4b 100644
          $.table,
        )),
        optional(seq(
-@@ -111,25 +158,22 @@ export default grammar({
+-        ':',
++        $._type_colon,
+         field('type', $._revo_type)
+       )),
+       '=',
+@@ -111,25 +159,22 @@ export default grammar({
        field('consequence', $.expression),
        optional(seq('else', field('alternative', $.expression))))),
      operator: $ => $._operator,
@@ -172,7 +178,7 @@ index 59e2572..3fd9e4b 100644
        '+=',
        '-=',
        '/=',
-@@ -141,6 +185,7 @@ export default grammar({
+@@ -141,6 +186,7 @@ export default grammar({
        '>=',
        '!=',
        '~',
@@ -180,7 +186,7 @@ index 59e2572..3fd9e4b 100644
        '|>',
        '//',
        'band',
-@@ -149,87 +194,177 @@ export default grammar({
+@@ -149,87 +195,177 @@ export default grammar({
        'shl',
        'shr',
        'orelse',
@@ -396,7 +402,7 @@ index 59e2572..3fd9e4b 100644
      ),
      parameters: $ => seq(
        '(',
-@@ -240,11 +375,11 @@ export default grammar({
+@@ -240,23 +376,23 @@ export default grammar({
        ))),
        ')'
      ),
@@ -413,7 +419,12 @@ index 59e2572..3fd9e4b 100644
      ),
      parameter: $ => seq(
        // Marks paramater as optional
-@@ -256,7 +391,7 @@ export default grammar({
+       optional('?'),
+       field('name', $._expression),
+       // Optional parameter type
+-      optional(seq(':', field('type', $._revo_type))),
++      optional(seq($._type_colon, field('type', $._revo_type))),
+       // Default function
        optional(
          seq(
            '=',
@@ -422,7 +433,7 @@ index 59e2572..3fd9e4b 100644
          ),
        ),
      ),
-@@ -301,17 +436,15 @@ export default grammar({
+@@ -301,17 +437,15 @@ export default grammar({
        /@[^a-zA-Z_]/,  // @ not followed by an identifier start
      ))),
  
@@ -442,7 +453,7 @@ index 59e2572..3fd9e4b 100644
        'string',
        'atom',
        'function',
-@@ -323,91 +456,175 @@ export default grammar({
+@@ -323,91 +457,175 @@ export default grammar({
      type_expression: $ => seq(
        optional($.visibility_modifier),
        'type',
@@ -490,7 +501,7 @@ index 59e2572..3fd9e4b 100644
 +    _signature_parameter: $ => seq(
 +      optional('?'),
 +      field('name', $._type_ident),
-+      optional(seq(':', field('type', $._revo_type))),
++      optional(seq($._type_colon, field('type', $._revo_type))),
 +      optional('...'),
 +    ),
 +    _contextual_type_name: $ => prec(4, alias(choice(...TYPE_NAME_KEYWORDS, 'self'), $.ident)),
@@ -574,7 +585,7 @@ index 59e2572..3fd9e4b 100644
 -    _type_assignment: $ => seq(':', $._space, field('type', $._revo_type)),
 +    // `{end = 1}`: a keyword directly before `=` is a key, as after a `.`.
 +    _keyword_field: $ => prec(2, seq(field('name', alias(choice(...TYPE_NAME_KEYWORDS), $.ident)), $._assignment)),
-+    _type_assignment: $ => seq(':', field('type', $._revo_type)),
++    _type_assignment: $ => seq($._type_colon, field('type', $._revo_type)),
      _assignment: $ => seq('=', field('value', $._expression)),
      field: $ => prec(1, seq(
        optional('const'),
@@ -603,7 +614,7 @@ index 59e2572..3fd9e4b 100644
 +    _record_type_field: $ => seq(
 +      optional('?'),
 +      field('name', $._type_ident),
-+      ':',
++      $._type_colon,
 +      field('type', $._revo_type),
 +    ),
 +    _record_type_entry: $ => choice(
@@ -665,7 +676,7 @@ index 59e2572..3fd9e4b 100644
      )),
      while_expression: $ => seq(
        $._while,
-@@ -418,13 +635,16 @@ export default grammar({
+@@ -418,13 +636,16 @@ export default grammar({
        $._loop,
        field('body', $.expression),
      ),
@@ -844,10 +855,10 @@ index 370c566..7bdbda4 100644
 +"declare" @keyword
 +(function_signature (parameters (parameter name: (ident) @variable.parameter)))
 diff --git a/src/scanner.c b/src/scanner.c
-index 2761703..4f1d712 100644
+index 2761703..a75f955 100644
 --- a/src/scanner.c
 +++ b/src/scanner.c
-@@ -1,72 +1,381 @@
+@@ -1,72 +1,382 @@
  #include "tree_sitter/parser.h"
  #include <stdbool.h>
 -// #include "tree_sitter/alloc.h"
@@ -1257,6 +1268,7 @@ index 2761703..4f1d712 100644
 +  BARE_ARG_REJECTED,
 +  PAREN_GENERIC,
 +  LEADING_BAR,
++  TYPE_COLON,
 +  ERROR_SENTINEL,
  };
  
@@ -1265,7 +1277,38 @@ index 2761703..4f1d712 100644
  void *tree_sitter_revo_external_scanner_create() {
    // Nothing needed here yet
    return NULL;
-@@ -86,13 +395,105 @@ void tree_sitter_revo_external_scanner_deserialize(void *payload,
+@@ -83,16 +393,152 @@ void tree_sitter_revo_external_scanner_deserialize(void *payload,
+                                                    const char *buffer,
+                                                    unsigned length) {}
+ 
++// After `:`, an atom name or symbol run. Returns false for a method call.
++static bool scan_atom_body(TSLexer *lexer) {
++  if (is_alpha(lexer->lookahead) || lexer->lookahead == '_') {
++    // Name atoms stop at operators. Like names, they may end with one `?`
++    // or `!`, but `:a!=b` compares `:a`.
++    do {
++      lexer->advance(lexer, false);
++    } while (is_alpha_num(lexer->lookahead) || lexer->lookahead == '_');
++    lexer->mark_end(lexer);
++    if (lexer->lookahead == '?' || lexer->lookahead == '!') {
++      bool bang = lexer->lookahead == '!';
++      lexer->advance(lexer, false);
++      if (!bang || lexer->lookahead != '=') lexer->mark_end(lexer);
++    }
++  } else if (is_symbol_atom(lexer->lookahead)) {
++    do {
++      lexer->advance(lexer, false);
++    } while (is_symbol_atom(lexer->lookahead));
++    lexer->mark_end(lexer);
++  } else {
++    return false;
++  }
++  // A touching argument list makes this a method call instead.
++  if (lexer->lookahead == '(') return false;
++  lexer->result_symbol = ATOM;
++  return true;
++}
++
  bool tree_sitter_revo_external_scanner_scan(void *payload, TSLexer *lexer,
                                              const bool *valid_symbols) {
  
@@ -1307,6 +1350,22 @@ index 2761703..4f1d712 100644
 +      if (lexer->lookahead == '|' || lexer->lookahead == '>') return false;
 +      lexer->mark_end(lexer);
 +      lexer->result_symbol = LEADING_BAR;
++      return true;
++    }
++  }
++
++  // Upstream lexes `:` touching a name or symbol as an atom, so a type colon
++  // needs a gap or punctuation after it: `x: number`, `x:{...}`, not `x:number`.
++  if (valid_symbols[TYPE_COLON] && !error_recovery) {
++    skip_whitespace(lexer, true);
++    if (lexer->lookahead == ':') {
++      lexer->advance(lexer, false);
++      int32_t c = lexer->lookahead;
++      if (is_alpha(c) || c == '_' || is_symbol_atom(c)) {
++        return valid_symbols[ATOM] && scan_atom_body(lexer);
++      }
++      lexer->mark_end(lexer);
++      lexer->result_symbol = TYPE_COLON;
 +      return true;
 +    }
 +  }
@@ -1376,7 +1435,7 @@ index 2761703..4f1d712 100644
    // Documentation
    if (next == '#' && valid_symbols[DOCUMENTATION]) {
      lexer->advance(lexer, false);
-@@ -120,153 +521,35 @@ bool tree_sitter_revo_external_scanner_scan(void *payload, TSLexer *lexer,
+@@ -120,153 +566,12 @@ bool tree_sitter_revo_external_scanner_scan(void *payload, TSLexer *lexer,
    }
    // Atoms
    else if (next == ':' && valid_symbols[ATOM]) {
@@ -1523,30 +1582,11 @@ index 2761703..4f1d712 100644
 -      } else {
 -        // `..A`
 -        return false;
-+    if (is_alpha(lexer->lookahead) || lexer->lookahead == '_') {
-+      // Name atoms stop at operators. Like names, they may end with one `?`
-+      // or `!`, but `:a!=b` compares `:a`.
-+      do {
-+        lexer->advance(lexer, false);
-+      } while (is_alpha_num(lexer->lookahead) || lexer->lookahead == '_');
-+      lexer->mark_end(lexer);
-+      if (lexer->lookahead == '?' || lexer->lookahead == '!') {
-+        bool bang = lexer->lookahead == '!';
-+        lexer->advance(lexer, false);
-+        if (!bang || lexer->lookahead != '=') lexer->mark_end(lexer);
-       }
-+    } else if (is_symbol_atom(lexer->lookahead)) {
-+      do {
-+        lexer->advance(lexer, false);
-+      } while (is_symbol_atom(lexer->lookahead));
-+      lexer->mark_end(lexer);
-     } else {
-       return false;
-     }
-+    // A touching argument list makes this a method call instead.
-+    if (lexer->lookahead == '(') return false;
-+    lexer->result_symbol = ATOM;
-+    return true;
+-      }
+-    } else {
+-      return false;
+-    }
++    return scan_atom_body(lexer);
 +  } else if ((next == '"' || next == '\'') && valid_symbols[STRING]) {
 +    if (!scan_string(lexer)) return false;
 +    lexer->result_symbol = STRING;
@@ -1791,10 +1831,10 @@ index 0000000..a07f9eb
 +    verify(options.grammar, options.queries, options.lib_path)
 diff --git a/test/ast/check_upstream.py b/test/ast/check_upstream.py
 new file mode 100644
-index 0000000..b26a25b
+index 0000000..dcd2838
 --- /dev/null
 +++ b/test/ast/check_upstream.py
-@@ -0,0 +1,259 @@
+@@ -0,0 +1,270 @@
 +"""Check complete programs at the current upstream syntax boundaries.
 +
 +Strings stay opaque editor tokens, including compiler-invalid interpolation
@@ -1899,6 +1939,11 @@ index 0000000..b26a25b
 +
 +# Upstream accepts these; each sits next to a rejected form below.
 +VALID_BOUNDARIES = {
++    'type colon before a record': 'fn f(x:{number}) x',
++    'type colon before a group': 'let x:(number) = 1',
++    'type colon before an atom': 'let x::a = :a',
++    'spaced type colon': 'fn f(x : number) x',
++    'method call in arguments': 'f(a, b:c())',
 +    'keyword field read': 'x.do; x.end',
 +    'keyword field assignment': 'x.do = 1; x.end = 2',
 +    'keyword method head': 'fn f.end() 1; fn obj:end() 1',
@@ -1969,6 +2014,12 @@ index 0000000..b26a25b
 +    'keyword key with type': 'let t = {end: number}',
 +    'same-line leading bar': 'type A = | :one | :two',
 +    'double leading bar': 'type A =\n  || :one',
++    'touching parameter type': 'fn f(x:number) x',
++    'touching declaration type': 'let x:number = 1',
++    'touching record field type': 'type R = {a:number}',
++    'touching signature type': 'type F = fn(a: number, b:string)',
++    'atom after a gap is not a type': 'fn f(x :number) x',
++    'method name without a call': 'print(t:ok?)',
 +}
 +
 +EDITOR_RECOVERY = {

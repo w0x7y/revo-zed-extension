@@ -4,9 +4,10 @@ The maintained grammar is published at
 [w0x7y/tree-sitter-revo](https://github.com/w0x7y/tree-sitter-revo), with all
 54 upstream commits retained and an MIT license crediting doomy, contributors
 and Idan Gilboa. `extension.toml` pins the reviewed public commit
-[`2d601965926d97412249d64b2dbb76bd7928c34d`](https://github.com/w0x7y/tree-sitter-revo/commit/2d601965926d97412249d64b2dbb76bd7928c34d),
-grammar 0.1.4, updated from `8800d5a957f02b48fad813447f9a4d1b88129de4`. The new
-commit also parses `?`-suffixed names after `.` and as loop variables.
+[`12bb46b71e90273da1dea2c97982c38eeb77f870`](https://github.com/w0x7y/tree-sitter-revo/commit/12bb46b71e90273da1dea2c97982c38eeb77f870),
+grammar 0.1.5, updated from `2d601965926d97412249d64b2dbb76bd7928c34d`. The new
+commit requires a gap or punctuation after a type colon, as the compiler's
+lexer does.
 
 The audit uses Revo compiler commit
 [`2d0306cec2d2181b417945c3475d749c0370b0cd`](https://github.com/if-not-nil/revo/commit/2d0306cec2d2181b417945c3475d749c0370b0cd)
@@ -115,7 +116,11 @@ declares `pub const match? = native.is_match`. Types keep the final `?` as the
 accepts these names as fields after `.`, as in `x.ok? = 1` and
 `re.match?(r, s)`, and as loop variables, as in `for k, v? in t`. After `:` a
 method name still takes a separate `?`, so `f(x: number?)` keeps its optional
-type.
+type. The compiler lexes a `:` that touches a name or symbol as an atom, so a
+type colon needs a gap or punctuation after it. `x: number`, `x:{number}` and
+`x:(number)` are annotations, while `x:number`, `let x:number = 1`,
+`{a:number}` and `print(t:ok?)` are errors. Method calls such as `t:ok()` are
+unchanged.
 
 Range bounds now use expression nodes for every numeric spelling, retaining the
 named `range` node. Arithmetic stays within its start, step or endpoint, and
