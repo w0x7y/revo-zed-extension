@@ -9,7 +9,7 @@ grammar 0.1.7, updated from `76346536442db0a78cc2325058b6d82a6448dbaa`. The new
 commit lets `spawn` take member and method calls, as the compiler does.
 
 The audit uses Revo compiler commit
-[`2d0306cec2d2181b417945c3475d749c0370b0cd`](https://github.com/if-not-nil/revo/commit/2d0306cec2d2181b417945c3475d749c0370b0cd)
+[`544bc65110d2ea912c24e222ec7309d9e20b104e`](https://github.com/if-not-nil/revo/commit/544bc65110d2ea912c24e222ec7309d9e20b104e)
 and Tree-sitter CLI 0.26.9. It moved from
 `e94e6d89ddaabb3249b38c1b10df87c700d1e8dc` to
 `f0034ab75aaf49d65bc1b4769987f99380383fcb` on 2026-10-10, when upstream
@@ -58,7 +58,7 @@ excluding it from the result.
 The public grammar pin and the compiler audit were refreshed on 2026-11-08 for
 `2ef8637`, the audit again on 2026-11-10 for `ebf3e79`, which needs no
 grammar change, both on 2026-11-14 for `87719dc`, and the audit on 2026-11-15
-for `2d0306c`, which needs no grammar change. The pin refreshed on 2026-10-28 followed `eefa192`:
+for `2d0306c`, which needs no grammar change, and on 2026-11-18 for `544bc65`, which also needs none. The pin refreshed on 2026-10-28 followed `eefa192`:
 `macro`, `proc` and `skip` are now ordinary names, so the grammar has no
 macro, procedural macro or quasiquote nodes and a backtick is a syntax error;
 `skip` still marks `test/skip`. A trailing `!` is part of an ordinary call
